@@ -6,29 +6,31 @@
       <!-- ヘッダー -->
       <div class="detail-header">
         <Button icon="pi pi-arrow-left" text rounded @click="$emit('back')" />
-        <span class="header-title">{{ track.name }}</span>
+        <span class="header-title">{{ meta.title }}</span>
       </div>
 
-      <!-- 音楽プレイヤー (ローディング中は非表示) -->
-      <div v-if="!loading && !error" class="player-bar">
+      <!-- 音楽プレイヤー (audioUrl が揃ってから表示) -->
+      <div class="player-bar">
         <audio ref="audioEl" :src="meta.audioUrl" preload="metadata"
+        v-if="meta.audioUrl"
           @timeupdate="onTimeUpdate" @loadedmetadata="onLoaded" @ended="playing = false" />
         <Button
           :icon="playing ? 'pi pi-pause' : 'pi pi-play'"
           rounded
           text
           class="play-btn"
+          :disabled="!meta.audioUrl"
           @click="togglePlay"
         />
         <div class="player-progress">
           <span class="player-time">{{ formatTime(currentTime) }}</span>
-          <Slider v-model="seekValue" :max="100" class="progress-slider" @change="onSeek" />
+          <Slider v-model="seekValue" :max="100" class="progress-slider" @change="onSeek" :disabled="!meta.audioUrl" />
           <span class="player-time">{{ formatTime(duration) }}</span>
         </div>
       </div>
 
       <!-- タブナビ -->
-      <div v-if="!loading && !error" class="tab-nav">
+      <div v-if="textReady" class="tab-nav">
         <button
           v-for="tab in tabs"
           :key="tab.value"
@@ -40,16 +42,16 @@
     </div>
 
     <!-- ===== スクロールコンテンツ ===== -->
-    <div v-if="loading" class="loading">
+    <div v-if="!textReady && !error" class="loading">
       <ProgressSpinner style="width: 40px; height: 40px" />
     </div>
 
-    <Message v-else-if="error" severity="error" :closable="false">{{ error }}</Message>
+    <Message v-if="error && !textReady" severity="error" :closable="false">{{ error }}</Message>
 
-    <template v-else>
+    <template v-if="textReady">
       <!-- 基本情報 -->
       <div v-show="activeTab === 'info'" class="tab-content">
-        <div v-if="meta.pictures?.length" class="artwork-scroll">
+        <div v-if="meta.pictures?.length" class="artwork-wrap">
           <img v-for="(src, i) in meta.pictures" :key="i" :src="src" class="artwork" :alt="`artwork ${i + 1}`" />
         </div>
         <div v-else class="artwork-wrap">
@@ -122,6 +124,8 @@ import Slider from 'primevue/slider'
 import { marked } from 'marked'
 import { fetchTrackMetadata } from '../services/trackMetadata'
 import ImageViewer from '../components/ImageViewer.vue'
+import { useTrackMetadataStore } from '../stores/trackMetadataStore'
+const metaStore = useTrackMetadataStore()
 
 const props = defineProps({
   track: { type: Object, required: true },
@@ -136,7 +140,7 @@ const tabs = [
 ]
 
 const meta = ref({})
-const loading = ref(true)
+const textReady = ref(false)
 const error = ref(null)
 const activeTab = ref('info')
 
@@ -196,12 +200,22 @@ const parsedTranscribedText = computed(() =>
 )
 
 onMounted(async () => {
+  // キャッシュがあればテキスト系を即反映
+  const cached = metaStore.cache[props.track.path_lower]
+  if (cached) {
+    Object.assign(meta.value, cached)
+    textReady.value = true
+  }
+
+  // audioUrl・画像は常時フェッチ
   try {
-    meta.value = await fetchTrackMetadata(props.track.path_lower)
+    const fetched = await fetchTrackMetadata(props.track.path_lower)
+    meta.value = fetched
+    metaStore.set(props.track.path_lower, fetched)
+    textReady.value = true
   } catch (e) {
-    error.value = e.message
-  } finally {
-    loading.value = false
+    if (!textReady.value) error.value = e.message
+    // キャッシュがある場合はテキストを表示し続ける（音声は利用不可）
   }
 })
 
@@ -215,6 +229,7 @@ onUnmounted(() => {
 <style scoped>
 .track-detail {
   padding-bottom: 24px;
+  height: 100%;
 }
 
 /* ===== 上部固定エリア ===== */
@@ -310,7 +325,12 @@ onUnmounted(() => {
 }
 
 .tab-content {
+  display: flex;
+  flex-direction: column;
+  height: 80%;
+  justify-content: space-between;
   padding-bottom: 8px;
+  overflow-y: scroll;
 }
 
 /* アートワーク */
@@ -330,12 +350,12 @@ onUnmounted(() => {
 .artwork-wrap {
   display: flex;
   justify-content: center;
-  padding: 16px 16px 12px;
+  padding:50px 16px ;
 }
 
 .artwork {
-  width: 200px;
-  height: 200px;
+  width: 250px;
+  height: 250px;
   object-fit: cover;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.2);
@@ -344,8 +364,8 @@ onUnmounted(() => {
 }
 
 .artwork-placeholder {
-  width: 200px;
-  height: 200px;
+  width: 250px;
+  height: 250px;
   border-radius: 12px;
   background: var(--p-content-hover-background);
   display: flex;
@@ -401,12 +421,12 @@ onUnmounted(() => {
 }
 
 .lyrics-block {
-  font-size: 15px;
+  font-size: 10px;
   line-height: 1.9;
 }
 
 .text-preview {
-  font-size: 13px;
+  font-size: 10px;
 }
 
 .md-preview {
@@ -483,5 +503,12 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0,0,0,0.15);
   cursor: zoom-in;
   active-opacity: 0.8;
+}
+.p-divider{
+  margin: 0.1rem;
+}
+.meta-card{
+  border: none;
+  margin-bottom: 0;
 }
 </style>

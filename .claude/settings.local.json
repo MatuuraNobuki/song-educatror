@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"s:\\\\projects\\\\song-educatror\")",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx cap:*)",
+      "Bash(npm run:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(ls node_modules/jsmediatags/build2/*.js)",
+      "Bash(ls node_modules/jsmediatags/build2/jsmediatags*)",
+      "Bash(python -c \"from PIL import Image; print\\('Pillow OK'\\)\")",
+      "Bash(node -e \"require\\('canvas'\\)\")",
+      "Bash(python scripts/generate_icon.py)",
+      "Bash(python -c ':*)",
+      "Bash(node -e \"require\\('sharp'\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(node -e \"require\\('sharp'\\); console.log\\('ok'\\)\")",
+      "Bash(npx sharp-cli:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"S:\\\\projects\\\\song-educatror\\\\gen-icons.ps1\")"
+    ]
+  }
+}

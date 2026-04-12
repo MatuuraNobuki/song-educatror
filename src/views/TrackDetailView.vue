@@ -9,35 +9,9 @@
         <span class="header-title">{{ meta.title }}</span>
       </div>
 
-      <!-- 音楽プレイヤー (audioUrl が揃ってから表示) -->
-      <div class="player-bar">
-        <audio ref="audioEl" :src="meta.audioUrl" preload="metadata"
-        v-if="meta.audioUrl"
-          @timeupdate="onTimeUpdate" @loadedmetadata="onLoaded" @ended="playing = false" />
-        <Button
-          :icon="playing ? 'pi pi-pause' : 'pi pi-play'"
-          rounded
-          text
-          class="play-btn"
-          :disabled="!meta.audioUrl"
-          @click="togglePlay"
-        />
-        <div class="player-progress">
-          <span class="player-time">{{ formatTime(currentTime) }}</span>
-          <Slider v-model="seekValue" :max="100" class="progress-slider" @change="onSeek" :disabled="!meta.audioUrl" />
-          <span class="player-time">{{ formatTime(duration) }}</span>
-        </div>
-      </div>
-
       <!-- タブナビ -->
       <div v-if="textReady" class="tab-nav">
-        <button
-          v-for="tab in tabs"
-          :key="tab.value"
-          class="tab-btn"
-          :class="{ active: activeTab === tab.value }"
-          @click="activeTab = tab.value; tab.value === 'quiz' && initQuizPhase()"
-        >{{ tab.label }}</button>
+        <button v-for="tab in tabs" :key="tab.value" class="tab-btn" :class="{ active: activeTab === tab.value }" @click="activeTab = tab.value; tab.value === 'quiz' && initQuizPhase()">{{ tab.label }}</button>
       </div>
     </div>
 
@@ -57,6 +31,7 @@
         <div v-else class="artwork-wrap">
           <div class="artwork-placeholder"><i class="pi pi-music" /></div>
         </div>
+        <span class="album-title">{{ meta.title }}</span>
         <div class="meta-card">
           <div class="meta-row">
             <span class="meta-label">Artist</span>
@@ -89,14 +64,7 @@
       <!-- 画像 -->
       <div v-show="activeTab === 'images'" class="tab-content">
         <div v-if="meta.extraPictures?.length" class="image-grid">
-          <img
-            v-for="(src, i) in meta.extraPictures"
-            :key="i"
-            :src="src"
-            class="extra-image"
-            :alt="`image ${i + 1}`"
-            @click="openViewer(src)"
-          />
+          <img v-for="(src, i) in meta.extraPictures" :key="i" :src="src" class="extra-image" :alt="`image ${i + 1}`" @click="openViewer(src)" />
         </div>
         <div v-else class="text-empty">追加画像がありません</div>
       </div>
@@ -120,12 +88,7 @@
             <p class="quiz-empty-title">テスト問題がまだありません</p>
             <p class="quiz-empty-desc">楽曲の情報をもとにオリジナルの問題を作成します</p>
             <Message v-if="quizGenError" severity="error" :closable="false" class="quiz-gen-error">{{ quizGenError }}</Message>
-            <Button
-              label="問題を作成する"
-              icon="pi pi-sparkles"
-              class="quiz-submit-btn"
-              @click="startGenerateQuiz"
-            />
+            <Button label="問題を作成する" icon="pi pi-sparkles" class="quiz-submit-btn" @click="startGenerateQuiz" />
           </div>
         </template>
 
@@ -140,16 +103,19 @@
         <!-- 問題フェーズ -->
         <template v-else-if="quizPhase === 'question'">
           <div class="quiz-header">
-          <div class="quiz-progress">
-            <span class="quiz-progress-text">{{ quizIndex + 1 }} / {{ quizQuestions.length }}</span>
-            <div class="quiz-progress-bar">
-              <div class="quiz-progress-fill" :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }" />
+            <div class="quiz-progress">
+              <span class="quiz-progress-text">{{ quizIndex + 1 }} / {{ quizQuestions.length }}</span>
+              <div class="quiz-progress-bar">
+                <div class="quiz-progress-fill" :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }" />
+              </div>
             </div>
-          </div>
-          <div class="quiz-shuffle-row quiz-shuffle-inline">
-            <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleQ" />
-            <label for="shuffleQ" class="quiz-shuffle-label">シャッフル</label>
-          </div>
+            <div class="quiz-header-actions">
+              <div class="quiz-shuffle-row quiz-shuffle-inline">
+                <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleQ" />
+                <label for="shuffleQ" class="quiz-shuffle-label">シャッフル</label>
+              </div>
+              <Button icon="pi pi-trash" text rounded size="small" severity="danger" class="quiz-clear-btn" @click="confirmClearQuiz" />
+            </div>
           </div>
           <div class="quiz-card">
             <p class="quiz-question">{{ currentQuestion.question }}</p>
@@ -162,18 +128,10 @@
                 <p v-if="hintOpen" class="quiz-hint-body">{{ currentQuestion.hint }}</p>
               </Transition>
             </div>
-            <InputText
-              v-model="userAnswer"
-              class="quiz-input"
-              placeholder="答えを入力してください"
-              @keyup.enter="userAnswer.trim() && submitAnswer()"
-            />
-            <Button
-              label="回答する"
-              class="quiz-submit-btn"
-              :disabled="!userAnswer.trim()"
-              @click="submitAnswer"
-            />
+          </div>
+          <div class="quiz-input">
+            <InputText v-model="userAnswer" class="quiz-input" placeholder="答えを入力してください" @keyup.enter="userAnswer.trim() && submitAnswer()" />
+            <Button label="回答する" class="quiz-submit-btn" :disabled="!userAnswer.trim()" @click="submitAnswer" />
           </div>
         </template>
 
@@ -186,17 +144,17 @@
                 <div class="quiz-progress-fill" :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }" />
               </div>
             </div>
-            <div class="quiz-shuffle-row quiz-shuffle-inline">
-              <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleF" />
-              <label for="shuffleF" class="quiz-shuffle-label">シャッフル</label>
+            <div class="quiz-header-actions">
+              <div class="quiz-shuffle-row quiz-shuffle-inline">
+                <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleF" />
+                <label for="shuffleF" class="quiz-shuffle-label">シャッフル</label>
+              </div>
+              <Button icon="pi pi-trash" text rounded size="small" severity="danger" class="quiz-clear-btn" @click="confirmClearQuiz" />
             </div>
           </div>
           <div class="quiz-card">
             <p class="quiz-question">{{ currentQuestion.question }}</p>
-            <div
-              class="quiz-feedback"
-              :class="quizResults[quizIndex].correct ? 'feedback-correct' : 'feedback-wrong'"
-            >
+            <div class="quiz-feedback" :class="quizResults[quizIndex].correct ? 'feedback-correct' : 'feedback-wrong'">
               <div class="feedback-icon">
                 <i :class="quizResults[quizIndex].correct ? 'pi pi-check-circle' : 'pi pi-times-circle'" />
               </div>
@@ -208,16 +166,23 @@
                 </div>
                 <div class="feedback-row">
                   <span class="feedback-tag">正解</span>
-                  <span class="feedback-correct-answer">{{ currentQuestion.answer }}</span>
+                  <span class="feedback-correct-answer">{{ (currentQuestion.answers ?? [currentQuestion.answer]).join(' / ') }}</span>
                 </div>
               </div>
               <p v-if="currentQuestion.hint" class="feedback-hint">{{ currentQuestion.hint }}</p>
+              <div v-if="!quizResults[quizIndex].correct || quizResults[quizIndex].manuallyAccepted" class="accept-correct-row">
+                <Checkbox v-model="acceptAsCorrect" :binary="true" inputId="acceptCorrect" :disabled="acceptValidating" @update:modelValue="val => val ? handleAcceptAsCorrect() : revertAcceptAsCorrect()" />
+                <label for="acceptCorrect" class="accept-correct-label">この答えを正解とする</label>
+                <ProgressSpinner v-if="acceptValidating" style="width: 18px; height: 18px" />
+              </div>
+              <div v-if="acceptReason" class="accept-reason" :class="acceptAsCorrect ? 'accept-reason--ok' : 'accept-reason--ng'">
+                <i :class="acceptAsCorrect ? 'pi pi-check-circle' : 'pi pi-times-circle'" />
+                {{ acceptReason }}
+              </div>
             </div>
-            <Button
-              :label="quizIndex + 1 < quizQuestions.length ? '次の問題へ' : '結果を見る'"
-              class="quiz-submit-btn"
-              @click="nextQuestion"
-            />
+          </div>
+          <div class="quiz-input">
+            <Button :label="quizIndex + 1 < quizQuestions.length ? '次の問題へ' : '結果を見る'" class="quiz-submit-btn" @click="nextQuestion" />
           </div>
         </template>
 
@@ -237,40 +202,52 @@
               </p>
             </div>
             <div class="result-list">
-              <div
-                v-for="(r, i) in quizResults"
-                :key="i"
-                class="result-item"
-                :class="r.correct ? 'result-item-correct' : 'result-item-wrong'"
-              >
+              <div v-for="(r, i) in quizResults" :key="i" class="result-item" :class="r.correct ? 'result-item-correct' : 'result-item-wrong'">
                 <i :class="r.correct ? 'pi pi-check' : 'pi pi-times'" class="result-item-icon" />
                 <div class="result-item-body">
                   <p class="result-item-q">{{ quizQuestions[quizOrder[i]].question }}</p>
                   <p v-if="!r.correct" class="result-item-ans">
-                    正解: <strong>{{ quizQuestions[quizOrder[i]].answer }}</strong>
+                    正解: <strong>{{ (quizQuestions[quizOrder[i]].answers ?? [quizQuestions[quizOrder[i]].answer]).join(' / ') }}</strong>
                   </p>
                 </div>
               </div>
             </div>
-            <Button
-              label="もう一度挑戦する"
-              icon="pi pi-refresh"
-              class="quiz-submit-btn"
-              @click="retryQuiz"
-            />
-            <Button
-              v-if="correctCount === quizQuestions.length"
-              label="別の問題にチャレンジ"
-              icon="pi pi-sparkles"
-              severity="secondary"
-              class="quiz-submit-btn"
-              @click="regenerateQuiz"
-            />
+            <Button label="もう一度挑戦する" icon="pi pi-refresh" class="quiz-submit-btn" @click="retryQuiz" />
+            <Button v-if="correctCount === quizQuestions.length" label="別の問題にチャレンジ" icon="pi pi-sparkles" severity="secondary" class="quiz-submit-btn" @click="regenerateQuiz" />
+            <Button label="テストをクリア" icon="pi pi-trash" severity="danger" text class="quiz-submit-btn" @click="confirmClearQuiz" />
           </div>
         </template>
 
       </div>
     </template>
+
+    <!-- テストクリア確認モーダル -->
+    <Dialog v-model:visible="clearConfirmVisible" modal :closable="false" :style="{ width: '280px' }" header="テストをクリア">
+      <p class="clear-confirm-msg">この曲のテスト問題と進捗をすべて削除します。<br>よろしいですか？</p>
+      <template #footer>
+        <Button label="キャンセル" text @click="clearConfirmVisible = false" />
+        <Button label="クリア" severity="danger" icon="pi pi-trash" @click="executeClearQuiz" />
+      </template>
+    </Dialog>
+
+    <!-- ===== 下部固定プレイヤー ===== -->
+    <div class="player-bar">
+      <audio ref="audioEl" :src="meta.audioUrl" preload="metadata" :loop="repeatEnabled" v-if="meta.audioUrl" @timeupdate="onTimeUpdate" @loadedmetadata="onLoaded" @ended="playing = false" />
+      <Button icon="pi pi-step-backward" rounded text :disabled="!prevTrack" @click="navigateTo(prevTrack)" />
+      <Button :icon="playing ? 'pi pi-pause' : 'pi pi-play'" rounded text class="play-btn" :disabled="!meta.audioUrl" @click="togglePlay" />
+      <Button icon="pi pi-step-forward" rounded text :disabled="!nextTrack" @click="navigateTo(nextTrack)" />
+      <div class="player-progress">
+        <span class="player-time">{{ formatTime(currentTime) }}</span>
+        <Slider v-model="seekValue" :max="100" class="progress-slider" @change="onSeek" :disabled="!meta.audioUrl" />
+        <span class="player-time">{{ formatTime(duration) }}</span>
+        <div class="repeat-toggle" :class="{ active: repeatEnabled, disabled: !meta.audioUrl }">
+          <label class="repeat-label" for="repeatToggle" aria-label="Toggle Repeat">
+            <i class="pi pi-sync" />
+          </label>
+          <ToggleSwitch v-model="repeatEnabled" :disabled="!meta.audioUrl" inputId="repeatToggle" class="repeat-switch-hidden" />
+        </div>
+      </div>
+    </div>
 
   </div>
 </template>
@@ -282,28 +259,50 @@ import Divider from 'primevue/divider'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import Slider from 'primevue/slider'
+import ToggleSwitch from 'primevue/toggleswitch'
 import InputText from 'primevue/inputtext'
 import Checkbox from 'primevue/checkbox'
+import Dialog from 'primevue/dialog'
 import { marked } from 'marked'
 import { fetchTrackMetadata } from '../services/trackMetadata'
+import { getCached, setCached } from '../services/prefetchCache'
 import ImageViewer from '../components/ImageViewer.vue'
 import { useTrackMetadataStore } from '../stores/trackMetadataStore'
 import { useQuizStore } from '../stores/quizStore'
-import { generateQuizQuestions } from '../services/claudeApi'
+import { generateQuizQuestions, validateAcceptAnswer } from '../services/claudeApi'
 const metaStore = useTrackMetadataStore()
 const quizStore = useQuizStore()
 
 const props = defineProps({
   track: { type: Object, required: true },
+  albumTracks: { type: Array, default: () => [] },
+  autoplay: { type: Boolean, default: false },
 })
-defineEmits(['back'])
+const emit = defineEmits(['back', 'select-track'])
+
+const currentIndex = computed(() => props.albumTracks.findIndex(t => t.id === props.track.id))
+const prevTrack = computed(() => {
+  if (!props.albumTracks.length) return null
+  const i = currentIndex.value
+  return props.albumTracks[(i - 1 + props.albumTracks.length) % props.albumTracks.length]
+})
+const nextTrack = computed(() => {
+  if (!props.albumTracks.length) return null
+  const i = currentIndex.value
+  return props.albumTracks[(i + 1) % props.albumTracks.length]
+})
+
+function navigateTo(track) {
+  if (!track) return
+  emit('select-track', { track, albumTracks: props.albumTracks, autoplay: true })
+}
 
 const tabs = [
-  { value: 'info',   label: '基本情報' },
+  { value: 'info', label: '基本情報' },
   { value: 'lyrics', label: '歌詞' },
   { value: 'images', label: '画像' },
-  { value: 'notes',  label: '解説' },
-  { value: 'quiz',   label: 'テスト' },
+  { value: 'notes', label: '解説' },
+  { value: 'quiz', label: 'テスト' },
 ]
 
 const meta = ref({})
@@ -323,6 +322,7 @@ function openViewer(src) {
 // プレイヤー
 const audioEl = ref(null)
 const playing = ref(false)
+const repeatEnabled = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
 const seekValue = ref(0)
@@ -340,6 +340,10 @@ function togglePlay() {
 
 function onLoaded() {
   duration.value = audioEl.value?.duration ?? 0
+  if (props.autoplay) {
+    audioEl.value.play()
+    playing.value = true
+  }
 }
 
 function onTimeUpdate() {
@@ -366,25 +370,83 @@ const parsedTranscribedText = computed(() =>
   meta.value.transcribedTextPreview ? marked.parse(meta.value.transcribedTextPreview) : ''
 )
 
-onMounted(async () => {
-  // キャッシュがあればテキスト系を即反映
-  const cached = metaStore.cache[props.track.path_lower]
-  if (cached) {
-    Object.assign(meta.value, cached)
+async function loadTrack(pathLower) {
+  // プレイヤーリセット
+  if (audioEl.value) audioEl.value.pause()
+  playing.value = false
+  currentTime.value = 0
+  duration.value = 0
+  seekValue.value = 0
+  // コンテンツリセット
+  meta.value = {}
+  textReady.value = false
+  error.value = null
+  activeTab.value = 'info'
+
+  // 1. IndexedDB プリフェッチキャッシュを確認（ヒット時は即反映して autoplay 可能に）
+  const prefetched = await getCached(pathLower)
+  if (prefetched) {
+    meta.value = prefetched
+    textReady.value = true
+    // バックグラウンドでネットワーク再フェッチ（audioUrl 更新）
+    fetchTrackMetadata(pathLower)
+      .then((fresh) => {
+        // 再生中は audioUrl を差し替えない（再生が中断されるため）
+        const audioUrl = playing.value ? meta.value.audioUrl : fresh.audioUrl
+        meta.value = { ...fresh, audioUrl }
+        metaStore.set(pathLower, fresh)
+        setCached(pathLower, fresh)
+      })
+      .catch(() => { })
+    prefetchAdjacentTracks()
+    return
+  }
+
+  // 2. インメモリキャッシュ（Pinia）でテキスト系を即反映
+  const inMemory = metaStore.cache[pathLower]
+  if (inMemory) {
+    Object.assign(meta.value, inMemory)
     textReady.value = true
   }
 
-  // audioUrl・画像は常時フェッチ
+  // 3. ネットワークフェッチ
   try {
-    const fetched = await fetchTrackMetadata(props.track.path_lower)
+    const fetched = await fetchTrackMetadata(pathLower)
     meta.value = fetched
-    metaStore.set(props.track.path_lower, fetched)
+    metaStore.set(pathLower, fetched)
     textReady.value = true
+    setCached(pathLower, fetched)
   } catch (e) {
     if (!textReady.value) error.value = e.message
-    // キャッシュがある場合はテキストを表示し続ける（音声は利用不可）
   }
-})
+
+  prefetchAdjacentTracks()
+}
+
+function prefetchAdjacentTracks() {
+  const adjacent = [prevTrack.value, nextTrack.value].filter(Boolean)
+  for (const track of adjacent) {
+    const path = track.path_lower
+    // インメモリキャッシュにあれば IndexedDB に書くだけ
+    if (metaStore.cache[path]) {
+      getCached(path).then((hit) => {
+        if (!hit) setCached(path, metaStore.cache[path])
+      })
+      continue
+    }
+    // 未取得ならバックグラウンドフェッチ
+    fetchTrackMetadata(path)
+      .then((data) => {
+        metaStore.set(path, data)
+        setCached(path, data)
+      })
+      .catch(() => { })
+  }
+}
+
+onMounted(() => loadTrack(props.track.path_lower))
+
+watch(() => props.track, (newTrack) => loadTrack(newTrack.path_lower))
 
 onUnmounted(() => {
   if (audioEl.value) audioEl.value.pause()
@@ -401,6 +463,9 @@ const hintOpen = ref(false)   // 出題順（インデックス配列）
 const userAnswer = ref('')
 const quizResults = ref([])
 const quizGenError = ref(null)
+const acceptAsCorrect = ref(false)
+const acceptValidating = ref(false)
+const acceptReason = ref(null)   // 許容・棄却どちらの理由も格納
 
 // ストアから現在トラックの問題一覧を取得
 const quizQuestions = computed(() => quizStore.getQuestions(props.track.path_lower) ?? [])
@@ -413,7 +478,7 @@ function generateOrder(length) {
   if (quizStore.shuffle) {
     for (let i = length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
-      ;[indices[i], indices[j]] = [indices[j], indices[i]]
+        ;[indices[i], indices[j]] = [indices[j], indices[i]]
     }
   }
   return indices
@@ -454,16 +519,20 @@ function initQuizPhase() {
     quizIndex.value = saved.index
     quizResults.value = saved.results
     quizOrder.value = saved.order
+    // feedbackフェーズ復元時にチェック状態を同期
+    const currentResult = saved.results[saved.index]
+    acceptAsCorrect.value = currentResult?.manuallyAccepted ?? false
+    acceptReason.value = null
   } else {
     startNewSession()
   }
 }
 
-async function startGenerateQuiz() {
+async function startGenerateQuiz(previousQuestions = null) {
   quizGenError.value = null
   quizPhase.value = 'generating'
   try {
-    const questions = await generateQuizQuestions(meta.value)
+    const questions = await generateQuizQuestions(meta.value, previousQuestions)
     quizStore.setQuestions(props.track.path_lower, questions)
     startNewSession()
   } catch (e) {
@@ -482,7 +551,7 @@ function applyShuffleToRemaining() {
   if (quizStore.shuffle) {
     for (let i = remaining.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
-      ;[remaining[i], remaining[j]] = [remaining[j], remaining[i]]
+        ;[remaining[i], remaining[j]] = [remaining[j], remaining[i]]
     }
   } else {
     remaining.sort((a, b) => a - b)
@@ -494,14 +563,58 @@ function applyShuffleToRemaining() {
 watch(() => quizStore.shuffle, applyShuffleToRemaining)
 
 function normalize(str) {
-  return str.trim().replace(/\s+/g, '')
+  return str
+    .trim()
+    .replace(/\s+/g, '')
+    .toLowerCase()
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)) // 全角英数→半角
 }
 
 function submitAnswer() {
   const q = currentQuestion.value
-  const correct = normalize(userAnswer.value) === normalize(q.answer)
-  quizResults.value.push({ correct, userAnswer: userAnswer.value, answer: q.answer })
+  // answers配列優先、古いanswer単体フィールドも互換対応
+  const answers = Array.isArray(q.answers) ? q.answers : [q.answers ?? q.answer]
+  const correct = answers.some(a => normalize(userAnswer.value) === normalize(a))
+  quizResults.value.push({ correct, userAnswer: userAnswer.value, answers })
+  acceptAsCorrect.value = false
+  acceptReason.value = null
   quizPhase.value = 'feedback'
+  saveProgress()
+}
+
+async function handleAcceptAsCorrect() {
+  acceptValidating.value = true
+  acceptReason.value = null
+  try {
+    const q = currentQuestion.value
+    const existingAnswers = Array.isArray(q.answers) ? q.answers : [q.answers ?? q.answer]
+    const result = await validateAcceptAnswer(q.question, existingAnswers, userAnswer.value, {
+      hint: q.hint,
+      transcribedText: meta.value.transcribedTextPreview,
+    })
+    if (result.accepted) {
+      const questionIndex = quizOrder.value[quizIndex.value]
+      quizStore.addAnswer(props.track.path_lower, questionIndex, userAnswer.value)
+      quizResults.value[quizIndex.value] = { ...quizResults.value[quizIndex.value], correct: true, manuallyAccepted: true }
+      acceptReason.value = result.reason ?? null
+      saveProgress()
+    } else {
+      acceptAsCorrect.value = false
+      acceptReason.value = result.reason ?? '正解として認められませんでした。'
+    }
+  } catch (e) {
+    acceptAsCorrect.value = false
+    acceptReason.value = e.message
+  } finally {
+    acceptValidating.value = false
+  }
+}
+
+function revertAcceptAsCorrect() {
+  const questionIndex = quizOrder.value[quizIndex.value]
+  quizStore.removeAnswer(props.track.path_lower, questionIndex, userAnswer.value)
+  quizResults.value[quizIndex.value] = { ...quizResults.value[quizIndex.value], correct: false, manuallyAccepted: false }
+  acceptReason.value = null
   saveProgress()
 }
 
@@ -517,21 +630,40 @@ function nextQuestion() {
   saveProgress()
 }
 
+const clearConfirmVisible = ref(false)
+
+function confirmClearQuiz() {
+  clearConfirmVisible.value = true
+}
+
+function executeClearQuiz() {
+  clearConfirmVisible.value = false
+  quizStore.removeTrack(props.track.path_lower)
+  quizPhase.value = 'empty'
+  quizIndex.value = 0
+  quizOrder.value = []
+  quizResults.value = []
+  quizGenError.value = null
+  acceptAsCorrect.value = false
+  acceptReason.value = null
+}
+
 function retryQuiz() {
   quizStore.clearProgress(props.track.path_lower)
   startNewSession()
 }
 
 function regenerateQuiz() {
+  const previous = quizStore.getQuestions(props.track.path_lower) ?? []
   quizStore.removeTrack(props.track.path_lower)
   quizGenError.value = null
-  startGenerateQuiz()
+  startGenerateQuiz(previous)
 }
 </script>
 
 <style scoped>
 .track-detail {
-  padding-bottom: 24px;
+  padding-bottom: 64px;
   height: 100%;
 }
 
@@ -561,15 +693,60 @@ function regenerateQuiz() {
 
 /* プレイヤーバー */
 .player-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  background: var(--p-content-background);
   border-top: 1px solid var(--p-content-border-color);
 }
 
 .play-btn {
   flex-shrink: 0;
+}
+
+.repeat-toggle {
+  opacity: 0.45;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.repeat-toggle.active {
+  color: var(--p-primary-color);
+  opacity: 1;
+}
+
+.repeat-toggle.disabled {
+  opacity: 0.45;
+}
+
+.repeat-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.repeat-switch-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .player-progress {
@@ -630,10 +807,11 @@ function regenerateQuiz() {
 .tab-content {
   display: flex;
   flex-direction: column;
-  height: 80%;
+  height: 90%;
   justify-content: space-between;
   padding-bottom: 8px;
   overflow-y: scroll;
+  overflow-x: hidden
 }
 
 /* アートワーク */
@@ -653,22 +831,22 @@ function regenerateQuiz() {
 .artwork-wrap {
   display: flex;
   justify-content: center;
-  padding:50px 16px ;
+  padding: 50px 16px;
 }
 
 .artwork {
-  width: 250px;
-  height: 250px;
+  width: 350px;
+  height: 350px;
   object-fit: cover;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
   scroll-snap-align: start;
 }
 
 .artwork-placeholder {
-  width: 250px;
-  height: 250px;
+  width: 350px;
+  height: 350px;
   border-radius: 12px;
   background: var(--p-content-hover-background);
   display: flex;
@@ -744,7 +922,9 @@ function regenerateQuiz() {
   line-height: 1.3;
 }
 
-.md-preview :deep(p) { margin: 0.4em 0; }
+.md-preview :deep(p) {
+  margin: 0.4em 0;
+}
 
 .md-preview :deep(ul),
 .md-preview :deep(ol) {
@@ -767,7 +947,10 @@ function regenerateQuiz() {
   overflow-x: auto;
 }
 
-.md-preview :deep(pre code) { background: none; padding: 0; }
+.md-preview :deep(pre code) {
+  background: none;
+  padding: 0;
+}
 
 .md-preview :deep(blockquote) {
   border-left: 3px solid var(--p-primary-color);
@@ -782,7 +965,9 @@ function regenerateQuiz() {
   margin: 0.8em 0;
 }
 
-.md-preview :deep(a) { color: var(--p-primary-color); }
+.md-preview :deep(a) {
+  color: var(--p-primary-color);
+}
 
 .text-empty {
   margin: 24px 16px;
@@ -803,14 +988,16 @@ function regenerateQuiz() {
   width: 100%;
   border-radius: 10px;
   object-fit: contain;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   cursor: zoom-in;
   active-opacity: 0.8;
 }
-.p-divider{
+
+.p-divider {
   margin: 0.1rem;
 }
-.meta-card{
+
+.meta-card {
   border: none;
   margin-bottom: 0;
 }
@@ -899,7 +1086,7 @@ function regenerateQuiz() {
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
-  width: 70%;
+  width: 60%;
 }
 
 .quiz-progress-text {
@@ -928,6 +1115,12 @@ function regenerateQuiz() {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.quiz-input {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .quiz-question {
@@ -1079,6 +1272,65 @@ function regenerateQuiz() {
   margin: 0;
 }
 
+.quiz-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.quiz-clear-btn {
+  margin-left: 4px;
+}
+
+.clear-confirm-msg {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--p-text-color);
+}
+
+.accept-correct-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--p-content-border-color);
+}
+
+.accept-correct-label {
+  font-size: 13px;
+  color: var(--p-text-color);
+  cursor: pointer;
+  user-select: none;
+}
+
+.accept-reason {
+  display: flex;
+  text-align: left;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.accept-reason--ok {
+  background: color-mix(in srgb, var(--p-green-500) 12%, transparent);
+  color: var(--p-green-600);
+}
+
+.accept-reason--ng {
+  background: color-mix(in srgb, var(--p-red-500) 12%, transparent);
+  color: var(--p-red-500);
+}
+
+.accept-reason .pi {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 /* リザルト */
 .quiz-result {
   display: flex;
@@ -1172,11 +1424,17 @@ function regenerateQuiz() {
   color: var(--p-text-muted-color);
   margin: 0;
 }
-.quiz-header{
+
+.quiz-header {
   width: 100%;
   display: flex;
   flex-direction: row;
-  gap:10px;
+  gap: 10px;
   justify-content: space-between;
+}
+
+.album-title {
+  text-align: center;
+  font-weight: bold;
 }
 </style>

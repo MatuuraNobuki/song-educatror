@@ -11,11 +11,6 @@
     </div>
 
     <template v-else>
-      <div class="toolbar">
-        <span class="path">{{ filePath }}</span>
-        <Button icon="pi pi-refresh" text rounded :loading="loading" @click="load" />
-      </div>
-
       <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 
       <div v-if="loading" class="loading">
@@ -23,8 +18,6 @@
       </div>
 
       <template v-if="!loading && !error">
-        <div v-if="tracks.length" class="track-count">{{ tracks.length }} 曲</div>
-
         <template v-for="[album, albumTracks] in groupedTracks" :key="album">
           <div class="album-header" @click="toggleAlbum(album)">
             <i class="pi pi-disc album-icon" />
@@ -33,7 +26,7 @@
             <i :class="['pi', collapsedAlbums.has(album) ? 'pi-chevron-right' : 'pi-chevron-down', 'album-chevron']" />
           </div>
           <div v-if="!collapsedAlbums.has(album)" class="track-list">
-            <div v-for="track in albumTracks" :key="track.id" class="track-row" @click="$emit('select-track', track)">
+            <div v-for="track in albumTracks" :key="track.id" class="track-row" @click="$emit('select-track', { track, albumTracks })">
               <span class="track-number">{{ trackNum(metadata[track.id]?.trackNumber) }}</span>
               <div class="track-info">
                 <span class="track-name">{{ metadata[track.id]?.title ?? stripExt(track.name) }}</span>
@@ -53,9 +46,9 @@
 
 <script setup>
 defineEmits(['select-track'])
+defineExpose({ load })
 
 import { ref, reactive, computed, onMounted } from 'vue'
-import Button from 'primevue/button'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import { isAuthenticated, loadFilePath } from '../services/dropboxAuth'
@@ -167,22 +160,6 @@ async function fetchAllMetadata(trackList) {
 <style scoped>
 .home {
   padding: 16px;
-}
-
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.path {
-  flex: 1;
-  font-size: 13px;
-  color: var(--p-text-muted-color);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .track-count {

@@ -49,9 +49,10 @@ async function blobUrlToBase64(blobUrl) {
 /**
  * 楽曲メタデータをもとに Claude でクイズ10問を生成する。
  * @param {object} meta - { title, artist, lyrics, transcribedTextPreview, extraPictures }
+ * @param {Array} [previousQuestions] - 再生成時に除外させる既存の問題一覧
  * @returns {Promise<Array>} QuizQuestion[]
  */
-export async function generateQuizQuestions(meta) {
+export async function generateQuizQuestions(meta, previousQuestions = null) {
   const client = createClient()
   if (!client) throw new Error('APIキーが設定されていません。設定画面からAPIキーを登録してください。')
 
@@ -61,6 +62,11 @@ export async function generateQuizQuestions(meta) {
   if (meta.artist) textParts.push(`【アーティスト】${meta.artist}`)
   if (meta.lyrics) textParts.push(`【歌詞】\n${meta.lyrics}`)
   if (meta.transcribedTextPreview) textParts.push(`【解説・楽曲情報】\n${meta.transcribedTextPreview}`)
+
+  if (previousQuestions?.length) {
+    const prevList = previousQuestions.map((q, i) => `${i + 1}. ${q.question}`).join('\n')
+    textParts.push(`【作成済みの問題（これらとは異なる、より難易度の高い問題を作成すること）】\n${prevList}`)
+  }
 
   const userText = textParts.length
     ? textParts.join('\n\n')
@@ -97,14 +103,21 @@ export async function generateQuizQuestions(meta) {
   {
     "id": 1,
     "question": "問題文",
-    "answer": "答え",
-    "hint": "ヒント（短く）"
+    "answers": ["正解1", "正解2", "表記ゆれ例"],
+    "hint": "ヒント（短く、回答をそのまま書かない）"
   }
 ]
 
-条件:
-- 問題は楽曲の内容・歌詞・背景知識・画像の内容から出題する
+answersフィールドのルール:
+- 必ず配列で指定する（1つだけでも配列にする）
+- 表記ゆれ・別表記・略称など、正解とみなすべきすべてのバリエーションを列挙する
+  例: 漢字・ひらがな・カタカナ・ローマ字・英語・数字表記など
+  例: "ドミソ" → ["ドミソ", "どみそ", "C major", "Cメジャー"]
+- 大文字小文字・全角半角の違いはシステム側で吸収するので列挙不要
 - 答えは短く明確（単語〜短文）にする
+
+その他の条件:
+- 問題は楽曲の内容・歌詞・背景知識・画像の内容から出題する
 - 同じ問いを繰り返さない
 - idは1〜10の連番にする
 - JSONのみ出力する`
@@ -137,4 +150,57 @@ export async function generateQuizQuestions(meta) {
   }
 
   return questions
+}
+
+/**
+ * ユーザーが「この答えを正解とする」で申請した回答をAIが検証する。
+ * 表記ゆれ・別表記レベルなら許容、明らかな誤答・無関係な回答は棄却。
+ * @param {string} question - 問題文
+ * @param {string[]} existingAnswers - 現在の正解リスト
+ * @param {string} userAnswer - ユーザーが申請した回答
+ * @param {object} [context] - { hint?: string, transcribedText?: string }
+ * @returns {Promise<{ accepted: boolean, reason?: string }>}
+ */
+export async function validateAcceptAnswer(question, existingAnswers, userAnswer, context = {}) {
+  const client = createClient()
+  if (!client) throw new Error('APIキーが設定されていません。')
+
+  const sections = []
+  if (context.transcribedText) {
+    sections.push(`【楽曲の解説・背景情報】\n${context.transcribedText}`)
+  }
+  sections.push(`【問題】\n${question}`)
+  if (context.hint) {
+    sections.push(`【ヒント】\n${context.hint}`)
+  }
+  sections.push(`【既存の正解】\n${existingAnswers.join('、')}`)
+  sections.push(`【申請された回答】\n${userAnswer}`)
+
+  const prompt = `以下のクイズ問題に対して、ユーザーが「この答えも正解にしてほしい」と申請しました。
+楽曲の解説・背景情報、問題文、ヒントをもとに問題の出題意図を正確に把握したうえで判定してください。
+
+${sections.join('\n\n')}
+
+判定基準:
+- 許容: 既存の正解と同じ概念を指す表記ゆれ・別表記・略称・同義語
+- 棄却: 意味が異なる・問題の出題意図に合わない・内容的に誤り・明らかに適当な入力
+
+以下のJSON形式のみで回答してください（余分な説明は不要）:
+許容する場合: {"accepted": true, "reason": "許容の理由（日本語、1〜2文）"}
+棄却する場合: {"accepted": false, "reason": "棄却の理由（日本語、1〜2文）"}`
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 256,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  const raw = message.content[0].text.trim()
+  try {
+    return JSON.parse(raw)
+  } catch {
+    const match = raw.match(/\{[\s\S]*?\}/)
+    if (match) return JSON.parse(match[0])
+    return { accepted: false, reason: 'AIによる検証に失敗しました。' }
+  }
 }

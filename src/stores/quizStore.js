@@ -27,6 +27,25 @@ export const useQuizStore = defineStore('quiz', {
     clearProgress(path) {
       delete this.progress[path]
     },
+    addAnswer(path, questionIndex, answer) {
+      const q = this.questions[path]?.[questionIndex]
+      if (!q) return
+      if (!Array.isArray(q.answers)) {
+        q.answers = [q.answers ?? q.answer]
+      }
+      const norm = (s) => s.trim().replace(/\s+/g, '').toLowerCase()
+        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+      if (!q.answers.some(a => norm(a) === norm(answer))) {
+        q.answers.push(answer)
+      }
+    },
+    removeAnswer(path, questionIndex, answer) {
+      const q = this.questions[path]?.[questionIndex]
+      if (!q || !Array.isArray(q.answers)) return
+      const norm = (s) => s.trim().replace(/\s+/g, '').toLowerCase()
+        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+      q.answers = q.answers.filter(a => norm(a) !== norm(answer))
+    },
     removeTrack(path) {
       delete this.questions[path]
       delete this.progress[path]

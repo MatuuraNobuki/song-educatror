@@ -57,6 +57,31 @@
     <Divider />
 
     <div class="section">
+      <p class="section-title">Claude AI</p>
+      <div class="fields">
+        <div class="field">
+          <label for="claudeApiKey">API キー</label>
+          <Password
+            id="claudeApiKey"
+            v-model="claudeApiKey"
+            placeholder="sk-ant-... を入力"
+            :feedback="false"
+            toggleMask
+            fluid
+          />
+        </div>
+      </div>
+      <Button
+        label="保存"
+        icon="pi pi-save"
+        severity="secondary"
+        @click="saveClaudeApiKey"
+      />
+    </div>
+
+    <Divider />
+
+    <div class="section">
       <p class="section-title">ファイルパス</p>
       <div class="fields">
         <div class="field">
@@ -93,6 +118,7 @@ import {
   loadFilePath,
   saveFilePath as persistFilePath,
 } from '../services/dropboxAuth'
+import { loadApiKey, saveApiKey } from '../services/claudeApi'
 
 const toast = useToast()
 
@@ -100,6 +126,7 @@ const appKey = ref('')
 const appSecret = ref('')
 const authenticated = ref(false)
 const filePath = ref('')
+const claudeApiKey = ref('')
 
 onMounted(() => {
   const creds = loadCredentials()
@@ -107,6 +134,7 @@ onMounted(() => {
   appSecret.value = creds.appSecret
   authenticated.value = isAuthenticated()
   filePath.value = loadFilePath()
+  claudeApiKey.value = loadApiKey()
 })
 
 function saveCredentials() {
@@ -122,6 +150,12 @@ async function authorize() {
     toast.add({ severity: 'error', summary: '認証エラー', detail: e.message, life: 4000 })
   }
 }
+
+function saveClaudeApiKey() {
+  saveApiKey(claudeApiKey.value.trim())
+  toast.add({ severity: 'success', summary: '保存しました', life: 2000 })
+}
+
 
 function saveFilePath() {
   persistFilePath(filePath.value.trim())

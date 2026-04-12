@@ -36,7 +36,7 @@
           :key="tab.value"
           class="tab-btn"
           :class="{ active: activeTab === tab.value }"
-          @click="activeTab = tab.value"
+          @click="activeTab = tab.value; tab.value === 'quiz' && initQuizPhase()"
         >{{ tab.label }}</button>
       </div>
     </div>
@@ -109,23 +109,189 @@
         <div v-if="meta.transcribedTextPreview" class="text-block text-preview md-preview" v-html="parsedTranscribedText"></div>
         <div v-else class="text-empty">解説データがありません</div>
       </div>
+
+      <!-- テスト -->
+      <div v-show="activeTab === 'quiz'" class="tab-content quiz-content">
+
+        <!-- 未作成フェーズ -->
+        <template v-if="quizPhase === 'empty'">
+          <div class="quiz-empty">
+            <i class="pi pi-lightbulb quiz-empty-icon" />
+            <p class="quiz-empty-title">テスト問題がまだありません</p>
+            <p class="quiz-empty-desc">楽曲の情報をもとにオリジナルの問題を作成します</p>
+            <Message v-if="quizGenError" severity="error" :closable="false" class="quiz-gen-error">{{ quizGenError }}</Message>
+            <Button
+              label="問題を作成する"
+              icon="pi pi-sparkles"
+              class="quiz-submit-btn"
+              @click="startGenerateQuiz"
+            />
+          </div>
+        </template>
+
+        <!-- 生成中フェーズ -->
+        <template v-else-if="quizPhase === 'generating'">
+          <div class="quiz-generating">
+            <ProgressSpinner style="width: 48px; height: 48px" />
+            <p class="quiz-generating-text">AIが問題を作成しています…</p>
+          </div>
+        </template>
+
+        <!-- 問題フェーズ -->
+        <template v-else-if="quizPhase === 'question'">
+          <div class="quiz-header">
+          <div class="quiz-progress">
+            <span class="quiz-progress-text">{{ quizIndex + 1 }} / {{ quizQuestions.length }}</span>
+            <div class="quiz-progress-bar">
+              <div class="quiz-progress-fill" :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }" />
+            </div>
+          </div>
+          <div class="quiz-shuffle-row quiz-shuffle-inline">
+            <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleQ" />
+            <label for="shuffleQ" class="quiz-shuffle-label">シャッフル</label>
+          </div>
+          </div>
+          <div class="quiz-card">
+            <p class="quiz-question">{{ currentQuestion.question }}</p>
+            <div v-if="currentQuestion.hint" class="quiz-hint-wrap">
+              <button class="quiz-hint-toggle" @click="hintOpen = !hintOpen">
+                <i :class="hintOpen ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" />
+                ヒント
+              </button>
+              <Transition name="hint">
+                <p v-if="hintOpen" class="quiz-hint-body">{{ currentQuestion.hint }}</p>
+              </Transition>
+            </div>
+            <InputText
+              v-model="userAnswer"
+              class="quiz-input"
+              placeholder="答えを入力してください"
+              @keyup.enter="userAnswer.trim() && submitAnswer()"
+            />
+            <Button
+              label="回答する"
+              class="quiz-submit-btn"
+              :disabled="!userAnswer.trim()"
+              @click="submitAnswer"
+            />
+          </div>
+        </template>
+
+        <!-- 正誤フェーズ -->
+        <template v-else-if="quizPhase === 'feedback'">
+          <div class="quiz-header">
+            <div class="quiz-progress">
+              <span class="quiz-progress-text">{{ quizIndex + 1 }} / {{ quizQuestions.length }}</span>
+              <div class="quiz-progress-bar">
+                <div class="quiz-progress-fill" :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }" />
+              </div>
+            </div>
+            <div class="quiz-shuffle-row quiz-shuffle-inline">
+              <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleF" />
+              <label for="shuffleF" class="quiz-shuffle-label">シャッフル</label>
+            </div>
+          </div>
+          <div class="quiz-card">
+            <p class="quiz-question">{{ currentQuestion.question }}</p>
+            <div
+              class="quiz-feedback"
+              :class="quizResults[quizIndex].correct ? 'feedback-correct' : 'feedback-wrong'"
+            >
+              <div class="feedback-icon">
+                <i :class="quizResults[quizIndex].correct ? 'pi pi-check-circle' : 'pi pi-times-circle'" />
+              </div>
+              <p class="feedback-label">{{ quizResults[quizIndex].correct ? '正解！' : '不正解' }}</p>
+              <div v-if="!quizResults[quizIndex].correct" class="feedback-detail">
+                <div class="feedback-row">
+                  <span class="feedback-tag">あなたの答え</span>
+                  <span class="feedback-user-answer">{{ quizResults[quizIndex].userAnswer }}</span>
+                </div>
+                <div class="feedback-row">
+                  <span class="feedback-tag">正解</span>
+                  <span class="feedback-correct-answer">{{ currentQuestion.answer }}</span>
+                </div>
+              </div>
+              <p v-if="currentQuestion.hint" class="feedback-hint">{{ currentQuestion.hint }}</p>
+            </div>
+            <Button
+              :label="quizIndex + 1 < quizQuestions.length ? '次の問題へ' : '結果を見る'"
+              class="quiz-submit-btn"
+              @click="nextQuestion"
+            />
+          </div>
+        </template>
+
+        <!-- リザルトフェーズ -->
+        <template v-else-if="quizPhase === 'result'">
+          <div class="quiz-result">
+            <div class="result-score-wrap">
+              <div class="result-score">
+                <span class="result-score-num">{{ correctCount }}</span>
+                <span class="result-score-total"> / {{ quizQuestions.length }}</span>
+              </div>
+              <p class="result-score-label">
+                <template v-if="correctCount === quizQuestions.length">全問正解！すばらしい！</template>
+                <template v-else-if="correctCount >= quizQuestions.length * 0.7">よくできました！</template>
+                <template v-else-if="correctCount >= quizQuestions.length * 0.4">もう少しです！</template>
+                <template v-else>復習してみましょう！</template>
+              </p>
+            </div>
+            <div class="result-list">
+              <div
+                v-for="(r, i) in quizResults"
+                :key="i"
+                class="result-item"
+                :class="r.correct ? 'result-item-correct' : 'result-item-wrong'"
+              >
+                <i :class="r.correct ? 'pi pi-check' : 'pi pi-times'" class="result-item-icon" />
+                <div class="result-item-body">
+                  <p class="result-item-q">{{ quizQuestions[quizOrder[i]].question }}</p>
+                  <p v-if="!r.correct" class="result-item-ans">
+                    正解: <strong>{{ quizQuestions[quizOrder[i]].answer }}</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+            <Button
+              label="もう一度挑戦する"
+              icon="pi pi-refresh"
+              class="quiz-submit-btn"
+              @click="retryQuiz"
+            />
+            <Button
+              v-if="correctCount === quizQuestions.length"
+              label="別の問題にチャレンジ"
+              icon="pi pi-sparkles"
+              severity="secondary"
+              class="quiz-submit-btn"
+              @click="regenerateQuiz"
+            />
+          </div>
+        </template>
+
+      </div>
     </template>
 
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import Button from 'primevue/button'
 import Divider from 'primevue/divider'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import Slider from 'primevue/slider'
+import InputText from 'primevue/inputtext'
+import Checkbox from 'primevue/checkbox'
 import { marked } from 'marked'
 import { fetchTrackMetadata } from '../services/trackMetadata'
 import ImageViewer from '../components/ImageViewer.vue'
 import { useTrackMetadataStore } from '../stores/trackMetadataStore'
+import { useQuizStore } from '../stores/quizStore'
+import { generateQuizQuestions } from '../services/claudeApi'
 const metaStore = useTrackMetadataStore()
+const quizStore = useQuizStore()
 
 const props = defineProps({
   track: { type: Object, required: true },
@@ -137,6 +303,7 @@ const tabs = [
   { value: 'lyrics', label: '歌詞' },
   { value: 'images', label: '画像' },
   { value: 'notes',  label: '解説' },
+  { value: 'quiz',   label: 'テスト' },
 ]
 
 const meta = ref({})
@@ -224,6 +391,142 @@ onUnmounted(() => {
   meta.value.pictures?.forEach((url) => URL.revokeObjectURL(url))
   meta.value.extraPictures?.forEach((url) => URL.revokeObjectURL(url))
 })
+
+// ===== クイズ =====
+// 'empty' | 'generating' | 'question' | 'feedback' | 'result'
+const quizPhase = ref('empty')
+const quizIndex = ref(0)
+const quizOrder = ref([])
+const hintOpen = ref(false)   // 出題順（インデックス配列）
+const userAnswer = ref('')
+const quizResults = ref([])
+const quizGenError = ref(null)
+
+// ストアから現在トラックの問題一覧を取得
+const quizQuestions = computed(() => quizStore.getQuestions(props.track.path_lower) ?? [])
+const currentQuestion = computed(() => quizQuestions.value[quizOrder.value[quizIndex.value]])
+const correctCount = computed(() => quizResults.value.filter(r => r.correct).length)
+
+/** シャッフルON/OFFに応じた出題順インデックス配列を生成 */
+function generateOrder(length) {
+  const indices = Array.from({ length }, (_, i) => i)
+  if (quizStore.shuffle) {
+    for (let i = length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[indices[i], indices[j]] = [indices[j], indices[i]]
+    }
+  }
+  return indices
+}
+
+/** 現在の進捗をストアに保存 */
+function saveProgress() {
+  quizStore.setProgress(props.track.path_lower, {
+    phase: quizPhase.value,
+    index: quizIndex.value,
+    results: quizResults.value,
+    order: quizOrder.value,
+  })
+}
+
+/** 新規セッションを開始（順序を生成して最初から） */
+function startNewSession() {
+  quizIndex.value = 0
+  userAnswer.value = ''
+  quizResults.value = []
+  quizGenError.value = null
+  hintOpen.value = false
+  quizOrder.value = generateOrder(quizQuestions.value.length)
+  quizPhase.value = 'question'
+  saveProgress()
+}
+
+// テストタブを開いたときにフェーズを初期化（保存済み進捗があれば復元）
+function initQuizPhase() {
+  const questions = quizStore.getQuestions(props.track.path_lower)
+  if (!questions || questions.length === 0) {
+    quizPhase.value = 'empty'
+    return
+  }
+  const saved = quizStore.getProgress(props.track.path_lower)
+  if (saved) {
+    quizPhase.value = saved.phase
+    quizIndex.value = saved.index
+    quizResults.value = saved.results
+    quizOrder.value = saved.order
+  } else {
+    startNewSession()
+  }
+}
+
+async function startGenerateQuiz() {
+  quizGenError.value = null
+  quizPhase.value = 'generating'
+  try {
+    const questions = await generateQuizQuestions(meta.value)
+    quizStore.setQuestions(props.track.path_lower, questions)
+    startNewSession()
+  } catch (e) {
+    quizGenError.value = e.message
+    quizPhase.value = 'empty'
+  }
+}
+
+/** シャッフルON/OFF切り替え時に未回答部分だけ再配置 */
+function applyShuffleToRemaining() {
+  if (quizPhase.value !== 'question' && quizPhase.value !== 'feedback') return
+  // フィードバック中は現在の問題も「表示済み」なので +1
+  const answeredCount = quizIndex.value + 1
+  const answered = quizOrder.value.slice(0, answeredCount)
+  const remaining = quizOrder.value.slice(answeredCount)
+  if (quizStore.shuffle) {
+    for (let i = remaining.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[remaining[i], remaining[j]] = [remaining[j], remaining[i]]
+    }
+  } else {
+    remaining.sort((a, b) => a - b)
+  }
+  quizOrder.value = [...answered, ...remaining]
+  saveProgress()
+}
+
+watch(() => quizStore.shuffle, applyShuffleToRemaining)
+
+function normalize(str) {
+  return str.trim().replace(/\s+/g, '')
+}
+
+function submitAnswer() {
+  const q = currentQuestion.value
+  const correct = normalize(userAnswer.value) === normalize(q.answer)
+  quizResults.value.push({ correct, userAnswer: userAnswer.value, answer: q.answer })
+  quizPhase.value = 'feedback'
+  saveProgress()
+}
+
+function nextQuestion() {
+  if (quizIndex.value + 1 >= quizQuestions.value.length) {
+    quizPhase.value = 'result'
+  } else {
+    quizIndex.value++
+    userAnswer.value = ''
+    hintOpen.value = false
+    quizPhase.value = 'question'
+  }
+  saveProgress()
+}
+
+function retryQuiz() {
+  quizStore.clearProgress(props.track.path_lower)
+  startNewSession()
+}
+
+function regenerateQuiz() {
+  quizStore.removeTrack(props.track.path_lower)
+  quizGenError.value = null
+  startGenerateQuiz()
+}
 </script>
 
 <style scoped>
@@ -510,5 +813,370 @@ onUnmounted(() => {
 .meta-card{
   border: none;
   margin-bottom: 0;
+}
+
+/* ===== クイズ ===== */
+
+/* 未作成 */
+.quiz-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px 24px;
+  text-align: center;
+}
+
+.quiz-empty-icon {
+  font-size: 48px;
+  color: var(--p-primary-color);
+  opacity: 0.6;
+}
+
+.quiz-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.quiz-empty-desc {
+  font-size: 13px;
+  color: var(--p-text-muted-color);
+  line-height: 1.6;
+  margin: 0 0 4px;
+}
+
+.quiz-gen-error {
+  width: 100%;
+  font-size: 13px;
+}
+
+.quiz-shuffle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quiz-shuffle-label {
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.quiz-shuffle-inline {
+  justify-content: flex-end;
+  margin-bottom: 4px;
+}
+
+.quiz-shuffle-inline .quiz-shuffle-label {
+  font-size: 12px;
+  color: var(--p-text-muted-color);
+}
+
+/* 生成中 */
+.quiz-generating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 80px 24px;
+}
+
+.quiz-generating-text {
+  font-size: 14px;
+  color: var(--p-text-muted-color);
+  margin: 0;
+}
+
+.quiz-content {
+  padding: 16px;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.quiz-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  width: 70%;
+}
+
+.quiz-progress-text {
+  font-size: 13px;
+  color: var(--p-text-muted-color);
+  flex-shrink: 0;
+  min-width: 44px;
+}
+
+.quiz-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--p-content-hover-background);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.quiz-progress-fill {
+  height: 100%;
+  background: var(--p-primary-color);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.quiz-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quiz-question {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.quiz-hint-wrap {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.quiz-hint-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--p-text-muted-color);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.quiz-hint-toggle:hover {
+  background: var(--p-content-hover-background);
+}
+
+.quiz-hint-body {
+  margin: 0;
+  padding: 8px 12px 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--p-text-color);
+  background: var(--p-content-hover-background);
+  border-top: 1px solid var(--p-content-border-color);
+}
+
+.hint-enter-active,
+.hint-leave-active {
+  transition: opacity 0.15s ease, max-height 0.2s ease;
+  max-height: 120px;
+  overflow: hidden;
+}
+
+.hint-enter-from,
+.hint-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+.quiz-input {
+  width: 100%;
+}
+
+.quiz-submit-btn {
+  width: 100%;
+}
+
+/* フィードバック */
+.quiz-feedback {
+  border-radius: 12px;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.feedback-correct {
+  background: color-mix(in srgb, var(--p-green-500) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-green-500) 40%, transparent);
+}
+
+.feedback-wrong {
+  background: color-mix(in srgb, var(--p-red-500) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-red-500) 40%, transparent);
+}
+
+.feedback-icon i {
+  font-size: 36px;
+}
+
+.feedback-correct .feedback-icon i {
+  color: var(--p-green-500);
+}
+
+.feedback-wrong .feedback-icon i {
+  color: var(--p-red-500);
+}
+
+.feedback-label {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.feedback-correct .feedback-label {
+  color: var(--p-green-500);
+}
+
+.feedback-wrong .feedback-label {
+  color: var(--p-red-500);
+}
+
+.feedback-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.feedback-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.feedback-tag {
+  font-size: 11px;
+  background: var(--p-content-border-color);
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: var(--p-text-muted-color);
+}
+
+.feedback-user-answer {
+  font-size: 14px;
+  color: var(--p-red-500);
+  text-decoration: line-through;
+}
+
+.feedback-correct-answer {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.feedback-hint {
+  font-size: 12px;
+  color: var(--p-text-muted-color);
+  margin: 0;
+}
+
+/* リザルト */
+.quiz-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.result-score-wrap {
+  text-align: center;
+  padding: 28px 16px 20px;
+  background: var(--p-content-hover-background);
+  border-radius: 14px;
+}
+
+.result-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.result-score-num {
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--p-primary-color);
+  line-height: 1;
+}
+
+.result-score-total {
+  font-size: 20px;
+  color: var(--p-text-muted-color);
+}
+
+.result-score-label {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.result-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--p-content-border-color);
+}
+
+.result-item-correct {
+  background: color-mix(in srgb, var(--p-green-500) 8%, transparent);
+}
+
+.result-item-wrong {
+  background: color-mix(in srgb, var(--p-red-500) 8%, transparent);
+}
+
+.result-item-icon {
+  font-size: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.result-item-correct .result-item-icon {
+  color: var(--p-green-500);
+}
+
+.result-item-wrong .result-item-icon {
+  color: var(--p-red-500);
+}
+
+.result-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-item-q {
+  font-size: 13px;
+  margin: 0 0 2px;
+  line-height: 1.5;
+}
+
+.result-item-ans {
+  font-size: 12px;
+  color: var(--p-text-muted-color);
+  margin: 0;
+}
+.quiz-header{
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  gap:10px;
+  justify-content: space-between;
 }
 </style>

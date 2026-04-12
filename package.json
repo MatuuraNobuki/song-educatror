@@ -14,6 +14,7 @@
     "apk:install:prod": "npm run build && npx cap sync android && cd android && gradlew.bat installDebug"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@capacitor/android": "^8.3.0",
     "@capacitor/app": "^8.1.0",
     "@capacitor/browser": "^8.0.3",

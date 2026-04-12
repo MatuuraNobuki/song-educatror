@@ -19,13 +19,13 @@
 
       <template v-if="!loading && !error">
         <template v-for="[album, albumTracks] in groupedTracks" :key="album">
-          <div class="album-header" @click="toggleAlbum(album)">
+          <div class="album-header" @click="albumStore.toggle(album)">
             <i class="pi pi-disc album-icon" />
             <span class="album-name">{{ album }}</span>
             <span class="album-count">{{ albumTracks.length }}</span>
-            <i :class="['pi', collapsedAlbums.has(album) ? 'pi-chevron-right' : 'pi-chevron-down', 'album-chevron']" />
+            <i :class="['pi', albumStore.isExpanded(album) ? 'pi-chevron-down' : 'pi-chevron-right', 'album-chevron']" />
           </div>
-          <div v-if="!collapsedAlbums.has(album)" class="track-list">
+          <div v-if="albumStore.isExpanded(album)" class="track-list">
             <div v-for="track in albumTracks" :key="track.id" class="track-row" @click="$emit('select-track', { track, albumTracks })">
               <span class="track-number">{{ trackNum(metadata[track.id]?.trackNumber) }}</span>
               <div class="track-info">
@@ -55,8 +55,10 @@ import { isAuthenticated, loadFilePath } from '../services/dropboxAuth'
 import { listAllTracks } from '../services/dropboxFiles'
 import { fetchTrackMetadata } from '../services/trackMetadata'
 import { useTrackMetadataStore } from '../stores/trackMetadataStore'
+import { useAlbumCollapseStore } from '../stores/albumCollapseStore'
 
 const metaStore = useTrackMetadataStore()
+const albumStore = useAlbumCollapseStore()
 
 const authenticated = ref(false)
 const filePath = ref('')
@@ -64,7 +66,6 @@ const tracks = ref([])
 const loading = ref(false)
 const error = ref(null)
 const metadata = reactive({})
-const collapsedAlbums = ref(new Set())
 
 const groupedTracks = computed(() => {
   const groups = new Map()
@@ -81,11 +82,6 @@ const groupedTracks = computed(() => {
   return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))
 })
 
-function toggleAlbum(album) {
-  const s = new Set(collapsedAlbums.value)
-  s.has(album) ? s.delete(album) : s.add(album)
-  collapsedAlbums.value = s
-}
 
 function parseTrackNum(val) {
   return parseInt(String(val ?? '').split('/')[0]) || 999
@@ -111,7 +107,6 @@ async function load() {
   error.value = null
   tracks.value = []
   Object.keys(metadata).forEach(k => delete metadata[k])
-  collapsedAlbums.value = new Set()
   try {
     tracks.value = await listAllTracks(filePath.value)
 

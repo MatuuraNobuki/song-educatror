@@ -46,13 +46,26 @@ async function blobUrlToBase64(blobUrl) {
   });
 }
 
+/** 難易度別システムプロンプト */
+const DIFFICULTY_PROMPTS = {
+  low: `5問すべてを以下の形式の歌詞穴埋め問題にしてください。
+- "穴埋め：\\n\\nあの(________)のすきとおった風、\\n夏でも底に冷たさをもつ(________)"
+  - 歌詞は原文ママで表示し、原文ママで回答させること
+  - 複数箇所の穴埋めを求めるときはカンマ区切りで回答させる`,
+
+  medium: `5問すべてを解説・画像から重要単語[重要単語]を答えさせる問題にしてください。`,
+
+  high: `5問すべてを解説・画像から重要単語[重要単語]の説明を求めたり理由を確認する、文章で回答する問題にしてください。`,
+}
+
 /**
- * 楽曲メタデータをもとに Claude でクイズ10問を生成する。
+ * 楽曲メタデータをもとに Claude でクイズ5問を生成する。
  * @param {object} meta - { title, artist, lyrics, transcribedTextPreview, extraPictures }
  * @param {Array} [previousQuestions] - 再生成時に除外させる既存の問題一覧
+ * @param {'low'|'medium'|'high'} [difficulty] - 難易度
  * @returns {Promise<Array>} QuizQuestion[]
  */
-export async function generateQuizQuestions(meta, previousQuestions = null) {
+export async function generateQuizQuestions(meta, previousQuestions = null, difficulty = 'medium') {
   const client = createClient();
   if (!client) throw new Error("APIキーが設定されていません。設定画面からAPIキーを登録してください。");
 
@@ -66,7 +79,7 @@ export async function generateQuizQuestions(meta, previousQuestions = null) {
     textParts.push(`【作成済みの問題（これらとは異なる問題を作成すること）】\n${prevList}`);
   }
 
-  const userText = textParts.length ? textParts.join("\n\n") : "楽曲情報が提供されていません。一般的な音楽理論の問題を10問作成してください。";
+  const userText = textParts.length ? textParts.join("\n\n") : "楽曲情報が提供されていません。一般的な音楽理論の問題を5問作成してください。";
 
   // メッセージのコンテンツブロックを組み立て
   const contentBlocks = [];
@@ -91,13 +104,14 @@ export async function generateQuizQuestions(meta, previousQuestions = null) {
 
   contentBlocks.push({ type: "text", text: userText });
 
+  const difficultyInstruction = DIFFICULTY_PROMPTS[difficulty] ?? DIFFICULTY_PROMPTS.medium
+
   const systemPrompt = `あなたは音楽教育アプリのクイズ作成AIです。
-提供された楽曲情報（歌詞・解説・画像など）をもとに、学習に役立つ入力式クイズを正確に10問作成してください。
-1-3問目は以下の形式で記載し、歌詞の重要箇所の穴埋め問題にしてください。
-    "穴埋め：\\n\\nあの(________)のすきとおった風、夏でも底に冷たさをもつ青いそら"
-4-7問目は解説・画像から太字などの重要単語を答えさせる問題にしてください。
-8-10問目は解説・画像から重要単語の説明を求めたり理由を確認する問題としてください。
-問題同士で回答が重複しないようにしてください。
+提供された楽曲情報（歌詞・解説・画像など）をもとに、学習に役立つ入力式クイズを正確に5問作成してください。
+
+${difficultyInstruction}
+
+[重要単語]:解説資料でアスタリスクに囲まれている太字箇所や#始まりのヘッダーに記載されているもの
 
 以下のJSON配列形式のみで出力してください。マークダウンコードブロックや余分な説明は不要です:
 [
@@ -120,11 +134,10 @@ answersフィールドのルール:
 その他の条件:
 - 問題は楽曲の内容・歌詞・背景知識・画像の内容から出題する
 - ヒントや問題文に回答を直接書かない（〇〇と伏字にする）
+- 問題同士で回答が重複しないようにする
 - 同じ問いを繰り返さない
 - 別の問題同士で回答を重複させない
-- 解説資料でアスタリスクに囲まれている太字箇所や#始まりのヘッダーに記載されているものを優先して問題にする
-- 歌詞から穴埋め問題を作る際は必ず解説資料を参照し、歌詞で上記の優先単語が使われている個所を回答させる 解説資料の方を出さないこと
-- idは1〜10の連番にする
+- idは1〜5の連番にする
 - JSONのみ出力する`;
 
   const message = await client.messages.create({

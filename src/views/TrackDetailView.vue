@@ -11,7 +11,7 @@
 
       <!-- タブナビ -->
       <div v-if="textReady" class="tab-nav">
-        <button v-for="tab in tabs" :key="tab.value" class="tab-btn" :class="{ active: activeTab === tab.value }" @click="activeTab = tab.value; tab.value === 'quiz' && initQuizPhase()">{{ tab.label }}</button>
+        <button v-for="tab in tabs" :key="tab.value" class="tab-btn" :class="{ active: activeTab === tab.value }" @click="activeTab = tab.value">{{ tab.label }}</button>
       </div>
     </div>
 
@@ -83,14 +83,32 @@
       <!-- テスト -->
       <div v-show="activeTab === 'quiz'" class="tab-content quiz-content">
 
-        <!-- 未作成フェーズ -->
-        <template v-if="quizPhase === 'empty'">
-          <div class="quiz-empty">
-            <i class="pi pi-lightbulb quiz-empty-icon" />
-            <p class="quiz-empty-title">テスト問題がまだありません</p>
-            <p class="quiz-empty-desc">楽曲の情報をもとにオリジナルの問題を作成します</p>
+        <!-- 表紙フェーズ -->
+        <template v-if="quizPhase === 'cover'">
+          <div class="quiz-header">
+            <div class="quiz-header-actions" style="margin-left: auto">
+              <div class="quiz-shuffle-row quiz-shuffle-inline">
+                <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleCover" />
+                <label for="shuffleCover" class="quiz-shuffle-label">シャッフル</label>
+              </div>
+              <Button icon="pi pi-trash" text rounded size="small" severity="danger" class="quiz-clear-btn" @click="confirmClearQuiz" />
+            </div>
+          </div>
+          <div class="quiz-cover">
+            <i class="pi pi-lightbulb quiz-cover-icon" />
+            <p class="quiz-cover-title">テスト</p>
+            <p class="quiz-cover-desc">問題の種類を選んでテストを始めましょう</p>
             <Message v-if="quizGenError" severity="error" :closable="false" class="quiz-gen-error">{{ quizGenError }}</Message>
-            <Button label="問題を作成する" icon="pi pi-sparkles" class="quiz-submit-btn" @click="startGenerateQuiz" />
+          </div>
+          <div class="quiz-difficulty-btns">
+            <Button
+              v-for="d in ['low', 'medium', 'high']"
+              :key="d"
+              :label="DIFFICULTY_LABELS[d]"
+              :severity="{ low: 'info', medium: 'success', high: 'warn' }[d]"
+              class="quiz-submit-btn"
+              @click="startQuiz(d)"
+            />
           </div>
         </template>
 
@@ -116,6 +134,7 @@
                 <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleQ" />
                 <label for="shuffleQ" class="quiz-shuffle-label">シャッフル</label>
               </div>
+              <Button icon="pi pi-home" text rounded size="small" severity="secondary" @click="exitToCover" />
               <Button icon="pi pi-trash" text rounded size="small" severity="danger" class="quiz-clear-btn" @click="confirmClearQuiz" />
             </div>
           </div>
@@ -151,6 +170,7 @@
                 <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleF" />
                 <label for="shuffleF" class="quiz-shuffle-label">シャッフル</label>
               </div>
+              <Button icon="pi pi-home" text rounded size="small" severity="secondary" @click="exitToCover" />
               <Button icon="pi pi-trash" text rounded size="small" severity="danger" class="quiz-clear-btn" @click="confirmClearQuiz" />
             </div>
           </div>
@@ -161,12 +181,12 @@
                 <i :class="quizResults[quizIndex].correct ? 'pi pi-check-circle' : 'pi pi-times-circle'" />
               </div>
               <p class="feedback-label">{{ quizResults[quizIndex].correct ? '正解！' : '不正解' }}</p>
-              <div v-if="!quizResults[quizIndex].correct" class="feedback-detail">
+              <div class="feedback-detail">
                 <div class="feedback-row">
                   <span class="feedback-tag">あなたの答え</span>
-                  <span class="feedback-user-answer">{{ quizResults[quizIndex].userAnswer }}</span>
+                  <span class="feedback-user-answer" :class="quizResults[quizIndex].correct ? 'feedback-user-answer--correct' : 'feedback-user-answer--wrong'">{{ quizResults[quizIndex].userAnswer }}</span>
                 </div>
-                <div class="feedback-row">
+                <div v-if="!quizResults[quizIndex].correct" class="feedback-row">
                   <span class="feedback-tag">正解</span>
                   <span class="feedback-correct-answer">{{ (currentQuestion.answers ?? [currentQuestion.answer]).join(' / ') }}</span>
                 </div>
@@ -208,6 +228,9 @@
                 <i :class="r.correct ? 'pi pi-check' : 'pi pi-times'" class="result-item-icon" />
                 <div class="result-item-body">
                   <p class="result-item-q">{{ quizQuestions[quizOrder[i]].question }}</p>
+                  <p class="result-item-ans">
+                    あなたの答え: <strong :class="r.correct ? 'result-ans-correct' : 'result-ans-wrong'">{{ r.userAnswer }}</strong>
+                  </p>
                   <p v-if="!r.correct" class="result-item-ans">
                     正解: <strong>{{ (quizQuestions[quizOrder[i]].answers ?? [quizQuestions[quizOrder[i]].answer]).join(' / ') }}</strong>
                   </p>
@@ -216,6 +239,7 @@
             </div>
             <Button label="もう一度挑戦する" icon="pi pi-refresh" class="quiz-submit-btn" @click="retryQuiz" />
             <Button v-if="correctCount === quizQuestions.length" label="別の問題にチャレンジ" icon="pi pi-sparkles" severity="secondary" class="quiz-submit-btn" @click="regenerateQuiz" />
+            <Button label="表紙に戻る" icon="pi pi-home" severity="secondary" class="quiz-submit-btn" @click="exitToCover" />
             <Button label="テストをクリア" icon="pi pi-trash" severity="danger" text class="quiz-submit-btn" @click="confirmClearQuiz" />
           </div>
         </template>
@@ -457,8 +481,9 @@ onUnmounted(() => {
 })
 
 // ===== クイズ =====
-// 'empty' | 'generating' | 'question' | 'feedback' | 'result'
-const quizPhase = ref('empty')
+// 'cover' | 'generating' | 'question' | 'feedback' | 'result'
+const quizPhase = ref('cover')
+const quizDifficulty = ref('low') // 'low' | 'medium' | 'high'
 const quizIndex = ref(0)
 const quizOrder = ref([])
 const hintOpen = ref(false)   // 出題順（インデックス配列）
@@ -469,10 +494,12 @@ const acceptAsCorrect = ref(false)
 const acceptValidating = ref(false)
 const acceptReason = ref(null)   // 許容・棄却どちらの理由も格納
 
-// ストアから現在トラックの問題一覧を取得
-const quizQuestions = computed(() => quizStore.getQuestions(props.track.path_lower) ?? [])
+// ストアから現在難易度の問題一覧を取得
+const quizQuestions = computed(() => quizStore.getQuestions(props.track.path_lower, quizDifficulty.value) ?? [])
 const currentQuestion = computed(() => quizQuestions.value[quizOrder.value[quizIndex.value]])
 const correctCount = computed(() => quizResults.value.filter(r => r.correct).length)
+
+const DIFFICULTY_LABELS = { low: '穴埋め', medium: '単語回答', high: '文章回答' }
 
 /** シャッフルON/OFFに応じた出題順インデックス配列を生成 */
 function generateOrder(length) {
@@ -488,7 +515,7 @@ function generateOrder(length) {
 
 /** 現在の進捗をストアに保存 */
 function saveProgress() {
-  quizStore.setProgress(props.track.path_lower, {
+  quizStore.setProgress(props.track.path_lower, quizDifficulty.value, {
     phase: quizPhase.value,
     index: quizIndex.value,
     results: quizResults.value,
@@ -508,39 +535,40 @@ function startNewSession() {
   saveProgress()
 }
 
-// テストタブを開いたときにフェーズを初期化（保存済み進捗があれば復元）
-function initQuizPhase() {
-  const questions = quizStore.getQuestions(props.track.path_lower)
-  if (!questions || questions.length === 0) {
-    quizPhase.value = 'empty'
-    return
-  }
-  const saved = quizStore.getProgress(props.track.path_lower)
-  if (saved) {
-    quizPhase.value = saved.phase
-    quizIndex.value = saved.index
-    quizResults.value = saved.results
-    quizOrder.value = saved.order
-    // feedbackフェーズ復元時にチェック状態を同期
-    const currentResult = saved.results[saved.index]
-    acceptAsCorrect.value = currentResult?.manuallyAccepted ?? false
-    acceptReason.value = null
-  } else {
-    startNewSession()
-  }
-}
 
 async function startGenerateQuiz(previousQuestions = null) {
   quizGenError.value = null
   quizPhase.value = 'generating'
   try {
-    const questions = await generateQuizQuestions(meta.value, previousQuestions)
-    quizStore.setQuestions(props.track.path_lower, questions)
+    const questions = await generateQuizQuestions(meta.value, previousQuestions, quizDifficulty.value)
+    quizStore.setQuestions(props.track.path_lower, quizDifficulty.value, questions)
     startNewSession()
   } catch (e) {
     quizGenError.value = e.message
-    quizPhase.value = 'empty'
+    quizPhase.value = 'cover'
   }
+}
+
+/** 表紙の難易度ボタンを押したとき */
+function startQuiz(difficulty) {
+  quizDifficulty.value = difficulty
+  if (quizStore.hasDifficulty(props.track.path_lower, difficulty)) {
+    startNewSession()
+  } else {
+    startGenerateQuiz()
+  }
+}
+
+/** 問題途中から表紙へ戻る */
+function exitToCover() {
+  quizPhase.value = 'cover'
+  quizIndex.value = 0
+  userAnswer.value = ''
+  quizResults.value = []
+  hintOpen.value = false
+  quizOrder.value = []
+  acceptAsCorrect.value = false
+  acceptReason.value = null
 }
 
 /** シャッフルON/OFF切り替え時に未回答部分だけ再配置 */
@@ -596,7 +624,7 @@ async function handleAcceptAsCorrect() {
     })
     if (result.accepted) {
       const questionIndex = quizOrder.value[quizIndex.value]
-      quizStore.addAnswer(props.track.path_lower, questionIndex, userAnswer.value)
+      quizStore.addAnswer(props.track.path_lower, quizDifficulty.value, questionIndex, userAnswer.value)
       quizResults.value[quizIndex.value] = { ...quizResults.value[quizIndex.value], correct: true, manuallyAccepted: true }
       acceptReason.value = result.reason ?? null
       saveProgress()
@@ -614,7 +642,7 @@ async function handleAcceptAsCorrect() {
 
 function revertAcceptAsCorrect() {
   const questionIndex = quizOrder.value[quizIndex.value]
-  quizStore.removeAnswer(props.track.path_lower, questionIndex, userAnswer.value)
+  quizStore.removeAnswer(props.track.path_lower, quizDifficulty.value, questionIndex, userAnswer.value)
   quizResults.value[quizIndex.value] = { ...quizResults.value[quizIndex.value], correct: false, manuallyAccepted: false }
   acceptReason.value = null
   saveProgress()
@@ -641,7 +669,7 @@ function confirmClearQuiz() {
 function executeClearQuiz() {
   clearConfirmVisible.value = false
   quizStore.removeTrack(props.track.path_lower)
-  quizPhase.value = 'empty'
+  quizPhase.value = 'cover'
   quizIndex.value = 0
   quizOrder.value = []
   quizResults.value = []
@@ -651,12 +679,12 @@ function executeClearQuiz() {
 }
 
 function retryQuiz() {
-  quizStore.clearProgress(props.track.path_lower)
+  quizStore.clearProgress(props.track.path_lower, quizDifficulty.value)
   startNewSession()
 }
 
 function regenerateQuiz() {
-  const previous = quizStore.getQuestions(props.track.path_lower) ?? []
+  const previous = quizStore.getQuestions(props.track.path_lower, quizDifficulty.value) ?? []
   quizStore.removeTrack(props.track.path_lower)
   quizGenError.value = null
   startGenerateQuiz(previous)
@@ -1010,8 +1038,8 @@ function regenerateQuiz() {
 
 /* ===== クイズ ===== */
 
-/* 未作成 */
-.quiz-empty {
+/* 表紙 */
+.quiz-cover {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1020,19 +1048,27 @@ function regenerateQuiz() {
   text-align: center;
 }
 
-.quiz-empty-icon {
+.quiz-cover-icon {
   font-size: 48px;
   color: var(--p-primary-color);
   opacity: 0.6;
 }
 
-.quiz-empty-title {
-  font-size: 16px;
-  font-weight: 600;
+.quiz-cover-title {
+  font-size: 18px;
+  font-weight: 700;
   margin: 0;
 }
 
-.quiz-empty-desc {
+.quiz-difficulty-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.quiz-cover-desc {
   font-size: 13px;
   color: var(--p-text-muted-color);
   line-height: 1.6;
@@ -1092,7 +1128,7 @@ function regenerateQuiz() {
   align-items: center;
   gap: 10px;
   margin-bottom: 8px;
-  width: 60%;
+  width: 50%;
 }
 
 .quiz-progress-text {
@@ -1264,6 +1300,13 @@ function regenerateQuiz() {
 
 .feedback-user-answer {
   font-size: 14px;
+}
+
+.feedback-user-answer--correct {
+  color: var(--p-green-500);
+}
+
+.feedback-user-answer--wrong {
   color: var(--p-red-500);
   text-decoration: line-through;
 }
@@ -1430,6 +1473,15 @@ function regenerateQuiz() {
   font-size: 12px;
   color: var(--p-text-muted-color);
   margin: 0;
+}
+
+.result-ans-correct {
+  color: var(--p-green-500);
+}
+
+.result-ans-wrong {
+  color: var(--p-red-500);
+  text-decoration: line-through;
 }
 
 .quiz-header {

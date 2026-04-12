@@ -4,6 +4,7 @@ import { Browser } from '@capacitor/browser'
 const STORAGE_KEY_APP_KEY = 'dropbox_app_key'
 const STORAGE_KEY_APP_SECRET = 'dropbox_app_secret'
 const STORAGE_KEY_TOKEN = 'dropbox_access_token'
+const STORAGE_KEY_REFRESH_TOKEN = 'dropbox_refresh_token'
 const STORAGE_KEY_VERIFIER = 'dropbox_code_verifier'
 const STORAGE_KEY_FILE_PATH = 'dropbox_file_path'
 
@@ -29,8 +30,12 @@ export function getAccessToken() {
   return localStorage.getItem(STORAGE_KEY_TOKEN)
 }
 
+export function getRefreshToken() {
+  return localStorage.getItem(STORAGE_KEY_REFRESH_TOKEN)
+}
+
 export function isAuthenticated() {
-  return !!getAccessToken()
+  return !!(getRefreshToken() || getAccessToken())
 }
 
 export function saveFilePath(path) {
@@ -43,14 +48,28 @@ export function loadFilePath() {
 
 export function clearAuth() {
   localStorage.removeItem(STORAGE_KEY_TOKEN)
+  localStorage.removeItem(STORAGE_KEY_REFRESH_TOKEN)
   localStorage.removeItem(STORAGE_KEY_VERIFIER)
 }
 
 export function getDropboxClient() {
-  const token = getAccessToken()
   const { appKey } = loadCredentials()
-  if (!token || !appKey) return null
-  return new Dropbox({ accessToken: token, clientId: appKey })
+  if (!appKey) return null
+
+  const refreshToken = getRefreshToken()
+  const accessToken = getAccessToken()
+
+  if (!refreshToken && !accessToken) return null
+
+  // リフレッシュトークンがあれば DropboxAuth 経由で自動リフレッシュを有効化
+  if (refreshToken) {
+    const auth = new DropboxAuth({ clientId: appKey })
+    auth.setRefreshToken(refreshToken)
+    if (accessToken) auth.setAccessToken(accessToken)
+    return new Dropbox({ auth })
+  }
+
+  return new Dropbox({ accessToken, clientId: appKey })
 }
 
 export async function startAuthFlow() {
@@ -83,10 +102,13 @@ export async function handleCallback(code) {
   auth.setCodeVerifier(verifier)
 
   const response = await auth.getAccessTokenFromCode(REDIRECT_URI, code)
-  const token = response.result.access_token
+  const { access_token, refresh_token } = response.result
 
-  localStorage.setItem(STORAGE_KEY_TOKEN, token)
+  localStorage.setItem(STORAGE_KEY_TOKEN, access_token)
+  if (refresh_token) {
+    localStorage.setItem(STORAGE_KEY_REFRESH_TOKEN, refresh_token)
+  }
   localStorage.removeItem(STORAGE_KEY_VERIFIER)
 
-  return token
+  return access_token
 }

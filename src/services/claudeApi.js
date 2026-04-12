@@ -1,17 +1,17 @@
-import Anthropic from '@anthropic-ai/sdk'
+import Anthropic from "@anthropic-ai/sdk";
 
-const STORAGE_KEY = 'claude_api_key'
+const STORAGE_KEY = "claude_api_key";
 
 export function saveApiKey(apiKey) {
-  localStorage.setItem(STORAGE_KEY, apiKey)
+  localStorage.setItem(STORAGE_KEY, apiKey);
 }
 
 export function loadApiKey() {
-  return localStorage.getItem(STORAGE_KEY) ?? ''
+  return localStorage.getItem(STORAGE_KEY) ?? "";
 }
 
 export function clearApiKey() {
-  localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(STORAGE_KEY);
 }
 
 /**
@@ -19,31 +19,31 @@ export function clearApiKey() {
  * APIキーが未設定の場合は null を返す。
  */
 export function createClient() {
-  const apiKey = loadApiKey()
-  if (!apiKey) return null
+  const apiKey = loadApiKey();
+  if (!apiKey) return null;
 
   return new Anthropic({
     apiKey,
     // Capacitor（ブラウザ環境）から直接呼び出すため必要
     dangerouslyAllowBrowser: true,
-  })
+  });
 }
 
 /**
  * Blob URL を base64 に変換する
  */
 async function blobUrlToBase64(blobUrl) {
-  const resp = await fetch(blobUrl)
-  const blob = await resp.blob()
+  const resp = await fetch(blobUrl);
+  const blob = await resp.blob();
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onloadend = () => {
-      const base64 = reader.result.split(',')[1]
-      resolve({ base64, mediaType: blob.type || 'image/jpeg' })
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
+      const base64 = reader.result.split(",")[1];
+      resolve({ base64, mediaType: blob.type || "image/jpeg" });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 /**
@@ -53,50 +53,51 @@ async function blobUrlToBase64(blobUrl) {
  * @returns {Promise<Array>} QuizQuestion[]
  */
 export async function generateQuizQuestions(meta, previousQuestions = null) {
-  const client = createClient()
-  if (!client) throw new Error('APIキーが設定されていません。設定画面からAPIキーを登録してください。')
+  const client = createClient();
+  if (!client) throw new Error("APIキーが設定されていません。設定画面からAPIキーを登録してください。");
 
   // テキスト情報を組み立て
-  const textParts = []
-  if (meta.title)  textParts.push(`【曲名】${meta.title}`)
-  if (meta.artist) textParts.push(`【アーティスト】${meta.artist}`)
-  if (meta.lyrics) textParts.push(`【歌詞】\n${meta.lyrics}`)
-  if (meta.transcribedTextPreview) textParts.push(`【解説・楽曲情報】\n${meta.transcribedTextPreview}`)
-
+  const textParts = [];
+  if (meta.lyrics) textParts.push(`【歌詞】\n${meta.lyrics}`);
+  if (meta.transcribedTextPreview) textParts.push(`【解説・楽曲情報】\n${meta.transcribedTextPreview}`);
+  console.log(meta.transcribedTextPreview);
   if (previousQuestions?.length) {
-    const prevList = previousQuestions.map((q, i) => `${i + 1}. ${q.question}`).join('\n')
-    textParts.push(`【作成済みの問題（これらとは異なる、より難易度の高い問題を作成すること）】\n${prevList}`)
+    const prevList = previousQuestions.map((q, i) => `${i + 1}. ${q.question}`).join("\n");
+    textParts.push(`【作成済みの問題（これらとは異なる問題を作成すること）】\n${prevList}`);
   }
 
-  const userText = textParts.length
-    ? textParts.join('\n\n')
-    : '楽曲情報が提供されていません。一般的な音楽理論の問題を10問作成してください。'
+  const userText = textParts.length ? textParts.join("\n\n") : "楽曲情報が提供されていません。一般的な音楽理論の問題を10問作成してください。";
 
   // メッセージのコンテンツブロックを組み立て
-  const contentBlocks = []
+  const contentBlocks = [];
 
   // 画像（最大3枚）
   if (meta.extraPictures?.length) {
     for (const picUrl of meta.extraPictures.slice(0, 3)) {
       try {
-        const { base64, mediaType } = await blobUrlToBase64(picUrl)
+        const { base64, mediaType } = await blobUrlToBase64(picUrl);
         // Anthropic が受け付けるメディアタイプのみ
-        const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-        if (!allowed.includes(mediaType)) continue
+        const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+        if (!allowed.includes(mediaType)) continue;
         contentBlocks.push({
-          type: 'image',
-          source: { type: 'base64', media_type: mediaType, data: base64 },
-        })
+          type: "image",
+          source: { type: "base64", media_type: mediaType, data: base64 },
+        });
       } catch {
         // 変換失敗は無視
       }
     }
   }
 
-  contentBlocks.push({ type: 'text', text: userText })
+  contentBlocks.push({ type: "text", text: userText });
 
   const systemPrompt = `あなたは音楽教育アプリのクイズ作成AIです。
 提供された楽曲情報（歌詞・解説・画像など）をもとに、学習に役立つ入力式クイズを正確に10問作成してください。
+1-3問目は以下の形式で記載し、歌詞の重要箇所の穴埋め問題にしてください。
+    "穴埋め：\\n\\nあの(________)のすきとおった風、夏でも底に冷たさをもつ青いそら"
+4-7問目は解説・画像から太字などの重要単語を答えさせる問題にしてください。
+8-10問目は解説・画像から重要単語の説明を求めたり理由を確認する問題としてください。
+問題同士で回答が重複しないようにしてください。
 
 以下のJSON配列形式のみで出力してください。マークダウンコードブロックや余分な説明は不要です:
 [
@@ -104,7 +105,7 @@ export async function generateQuizQuestions(meta, previousQuestions = null) {
     "id": 1,
     "question": "問題文",
     "answers": ["正解1", "正解2", "表記ゆれ例"],
-    "hint": "ヒント（短く、回答をそのまま書かない）"
+    "hint": "ヒント（短く）"
   }
 ]
 
@@ -118,38 +119,42 @@ answersフィールドのルール:
 
 その他の条件:
 - 問題は楽曲の内容・歌詞・背景知識・画像の内容から出題する
+- ヒントや問題文に回答を直接書かない（〇〇と伏字にする）
 - 同じ問いを繰り返さない
+- 別の問題同士で回答を重複させない
+- 解説資料でアスタリスクに囲まれている太字箇所や#始まりのヘッダーに記載されているものを優先して問題にする
+- 歌詞から穴埋め問題を作る際は必ず解説資料を参照し、歌詞で上記の優先単語が使われている個所を回答させる
 - idは1〜10の連番にする
-- JSONのみ出力する`
+- JSONのみ出力する`;
 
   const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 2048,
     system: systemPrompt,
-    messages: [{ role: 'user', content: contentBlocks }],
-  })
+    messages: [{ role: "user", content: contentBlocks }],
+  });
 
-  const rawText = message.content[0].text.trim()
+  const rawText = message.content[0].text.trim();
 
   // JSON パース（コードブロックで囲まれていた場合も考慮）
-  let jsonText = rawText
-  const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenceMatch) jsonText = fenceMatch[1].trim()
+  let jsonText = rawText;
+  const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) jsonText = fenceMatch[1].trim();
 
-  let questions
+  let questions;
   try {
-    questions = JSON.parse(jsonText)
+    questions = JSON.parse(jsonText);
   } catch {
-    const arrayMatch = jsonText.match(/\[[\s\S]*\]/)
-    if (!arrayMatch) throw new Error('クイズの生成に失敗しました。もう一度お試しください。')
-    questions = JSON.parse(arrayMatch[0])
+    const arrayMatch = jsonText.match(/\[[\s\S]*\]/);
+    if (!arrayMatch) throw new Error("クイズの生成に失敗しました。もう一度お試しください。");
+    questions = JSON.parse(arrayMatch[0]);
   }
 
   if (!Array.isArray(questions) || questions.length === 0) {
-    throw new Error('クイズの生成に失敗しました。もう一度お試しください。')
+    throw new Error("クイズの生成に失敗しました。もう一度お試しください。");
   }
 
-  return questions
+  return questions;
 }
 
 /**
@@ -162,24 +167,24 @@ answersフィールドのルール:
  * @returns {Promise<{ accepted: boolean, reason?: string }>}
  */
 export async function validateAcceptAnswer(question, existingAnswers, userAnswer, context = {}) {
-  const client = createClient()
-  if (!client) throw new Error('APIキーが設定されていません。')
+  const client = createClient();
+  if (!client) throw new Error("APIキーが設定されていません。");
 
-  const sections = []
+  const sections = [];
   if (context.transcribedText) {
-    sections.push(`【楽曲の解説・背景情報】\n${context.transcribedText}`)
+    sections.push(`【楽曲の解説・背景情報】\n${context.transcribedText}`);
   }
-  sections.push(`【問題】\n${question}`)
+  sections.push(`【問題】\n${question}`);
   if (context.hint) {
-    sections.push(`【ヒント】\n${context.hint}`)
+    sections.push(`【ヒント】\n${context.hint}`);
   }
-  sections.push(`【既存の正解】\n${existingAnswers.join('、')}`)
-  sections.push(`【申請された回答】\n${userAnswer}`)
+  sections.push(`【既存の正解】\n${existingAnswers.join("、")}`);
+  sections.push(`【申請された回答】\n${userAnswer}`);
 
   const prompt = `以下のクイズ問題に対して、ユーザーが「この答えも正解にしてほしい」と申請しました。
 楽曲の解説・背景情報、問題文、ヒントをもとに問題の出題意図を正確に把握したうえで判定してください。
 
-${sections.join('\n\n')}
+${sections.join("\n\n")}
 
 判定基準:
 - 許容: 既存の正解と同じ概念を指す表記ゆれ・別表記・略称・同義語
@@ -187,20 +192,20 @@ ${sections.join('\n\n')}
 
 以下のJSON形式のみで回答してください（余分な説明は不要）:
 許容する場合: {"accepted": true, "reason": "許容の理由（日本語、1〜2文）"}
-棄却する場合: {"accepted": false, "reason": "棄却の理由（日本語、1〜2文）"}`
+棄却する場合: {"accepted": false, "reason": "棄却の理由（日本語、1〜2文）"}`;
 
   const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 256,
-    messages: [{ role: 'user', content: prompt }],
-  })
+    messages: [{ role: "user", content: prompt }],
+  });
 
-  const raw = message.content[0].text.trim()
+  const raw = message.content[0].text.trim();
   try {
-    return JSON.parse(raw)
+    return JSON.parse(raw);
   } catch {
-    const match = raw.match(/\{[\s\S]*?\}/)
-    if (match) return JSON.parse(match[0])
-    return { accepted: false, reason: 'AIによる検証に失敗しました。' }
+    const match = raw.match(/\{[\s\S]*?\}/);
+    if (match) return JSON.parse(match[0]);
+    return { accepted: false, reason: "AIによる検証に失敗しました。" };
   }
 }

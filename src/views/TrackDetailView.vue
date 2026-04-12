@@ -25,13 +25,15 @@
     <template v-if="textReady">
       <!-- 基本情報 -->
       <div v-show="activeTab === 'info'" class="tab-content">
-        <div v-if="meta.pictures?.length" class="artwork-wrap">
-          <img v-for="(src, i) in meta.pictures" :key="i" :src="src" class="artwork" :alt="`artwork ${i + 1}`" />
+        <div class="albumTitle">
+          <div v-if="meta.pictures?.length" class="artwork-wrap">
+            <img v-for="(src, i) in meta.pictures" :key="i" :src="src" class="artwork" :alt="`artwork ${i + 1}`" />
+          </div>
+          <div v-else class="artwork-wrap">
+            <div class="artwork-placeholder"><i class="pi pi-music" /></div>
+          </div>
+          <span class="album-title">{{ meta.title }}</span>
         </div>
-        <div v-else class="artwork-wrap">
-          <div class="artwork-placeholder"><i class="pi pi-music" /></div>
-        </div>
-        <span class="album-title">{{ meta.title }}</span>
         <div class="meta-card">
           <div class="meta-row">
             <span class="meta-label">Artist</span>
@@ -807,13 +809,15 @@ function regenerateQuiz() {
 .tab-content {
   display: flex;
   flex-direction: column;
-  height: 90%;
+  height: 89%;
   justify-content: space-between;
   padding-bottom: 8px;
   overflow-y: scroll;
   overflow-x: hidden
 }
-
+.tab-content {
+  justify-content: space-between;
+}
 /* アートワーク */
 .artwork-scroll {
   display: flex;
@@ -831,9 +835,11 @@ function regenerateQuiz() {
 .artwork-wrap {
   display: flex;
   justify-content: center;
-  padding: 50px 16px;
+  padding: 30px 16px;
 }
-
+.albumTitle{
+  text-align: center;
+}
 .artwork {
   width: 350px;
   height: 350px;

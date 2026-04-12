@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "sync": "npm run build && npx cap sync android",
     "android": "npm run sync && npx cap open android",
+    "android:live": "npx cap run android --flavor dev -l --port 5173",
     "apk:install:dev": "npm run build && npx cap sync android && cd android && gradlew.bat installDebug",
-    "dev:android": "npx cap run android --livereload --external",
     "apk:install:prod": "npm run build && npx cap sync android && cd android && gradlew.bat installDebug"
   },
   "dependencies": {

@@ -72,8 +72,7 @@ export async function generateQuizQuestions(meta, previousQuestions = null, diff
   // テキスト情報を組み立て
   const textParts = [];
   if (meta.lyrics) textParts.push(`【歌詞】\n${meta.lyrics}`);
-  if (meta.transcribedTextPreview) textParts.push(`【解説・楽曲情報】\n${meta.transcribedTextPreview}`);
-  console.log(meta.transcribedTextPreview);
+  if (difficulty !== 'low' && meta.transcribedTextPreview) textParts.push(`【解説・楽曲情報】\n${meta.transcribedTextPreview}`);
   if (previousQuestions?.length) {
     const prevList = previousQuestions.map((q, i) => `${i + 1}. ${q.question}`).join("\n");
     textParts.push(`【作成済みの問題（これらとは異なる問題を作成すること）】\n${prevList}`);
@@ -84,8 +83,8 @@ export async function generateQuizQuestions(meta, previousQuestions = null, diff
   // メッセージのコンテンツブロックを組み立て
   const contentBlocks = [];
 
-  // 画像（最大3枚）
-  if (meta.extraPictures?.length) {
+  // 画像（最大3枚）low難易度では使用しない
+  if (difficulty !== 'low' && meta.extraPictures?.length) {
     for (const picUrl of meta.extraPictures.slice(0, 3)) {
       try {
         const { base64, mediaType } = await blobUrlToBase64(picUrl);

@@ -606,6 +606,7 @@ function submitAnswer() {
   const answers = Array.isArray(q.answers) ? q.answers : [q.answers ?? q.answer]
   const correct = answers.some(a => normalize(userAnswer.value) === normalize(a))
   quizResults.value.push({ correct, userAnswer: userAnswer.value, answers })
+  if (correct) quizStore.addCorrects(props.track.path_lower, quizDifficulty.value, 1)
   acceptAsCorrect.value = false
   acceptReason.value = null
   quizPhase.value = 'feedback'
@@ -626,6 +627,7 @@ async function handleAcceptAsCorrect() {
       const questionIndex = quizOrder.value[quizIndex.value]
       quizStore.addAnswer(props.track.path_lower, quizDifficulty.value, questionIndex, userAnswer.value)
       quizResults.value[quizIndex.value] = { ...quizResults.value[quizIndex.value], correct: true, manuallyAccepted: true }
+      quizStore.addCorrects(props.track.path_lower, quizDifficulty.value, 1)
       acceptReason.value = result.reason ?? null
       saveProgress()
     } else {
@@ -644,6 +646,7 @@ function revertAcceptAsCorrect() {
   const questionIndex = quizOrder.value[quizIndex.value]
   quizStore.removeAnswer(props.track.path_lower, quizDifficulty.value, questionIndex, userAnswer.value)
   quizResults.value[quizIndex.value] = { ...quizResults.value[quizIndex.value], correct: false, manuallyAccepted: false }
+  quizStore.addCorrects(props.track.path_lower, quizDifficulty.value, -1)
   acceptReason.value = null
   saveProgress()
 }
@@ -669,6 +672,7 @@ function confirmClearQuiz() {
 function executeClearQuiz() {
   clearConfirmVisible.value = false
   quizStore.removeTrack(props.track.path_lower)
+  quizStore.clearCorrectCounts(props.track.path_lower)
   quizPhase.value = 'cover'
   quizIndex.value = 0
   quizOrder.value = []

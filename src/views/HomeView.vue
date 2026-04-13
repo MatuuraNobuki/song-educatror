@@ -31,6 +31,11 @@
               <div class="track-info">
                 <span class="track-name">{{ metadata[track.id]?.title ?? stripExt(track.name) }}</span>
               </div>
+              <div class="track-quiz-chips">
+                <Tag severity="info" :value="quizStore.hasDifficulty(track.path_lower, 'low') ? (quizStore.correctCounts[track.path_lower]?.low ?? 0) : ''" class="quiz-chip" />
+                <Tag severity="success" :value="quizStore.hasDifficulty(track.path_lower, 'medium') ? (quizStore.correctCounts[track.path_lower]?.medium ?? 0) : ''" class="quiz-chip" />
+                <Tag severity="warn" :value="quizStore.hasDifficulty(track.path_lower, 'high') ? (quizStore.correctCounts[track.path_lower]?.high ?? 0) : ''" class="quiz-chip" />
+              </div>
             </div>
           </div>
         </template>
@@ -51,14 +56,17 @@ defineExpose({ load })
 import { ref, reactive, computed, onMounted } from 'vue'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
+import Tag from 'primevue/tag'
 import { isAuthenticated, loadFilePath } from '../services/dropboxAuth'
 import { listAllTracks } from '../services/dropboxFiles'
 import { fetchTrackMetadata } from '../services/trackMetadata'
 import { useTrackMetadataStore } from '../stores/trackMetadataStore'
 import { useAlbumCollapseStore } from '../stores/albumCollapseStore'
+import { useQuizStore } from '../stores/quizStore'
 
 const metaStore = useTrackMetadataStore()
 const albumStore = useAlbumCollapseStore()
+const quizStore = useQuizStore()
 
 const authenticated = ref(false)
 const filePath = ref('')
@@ -103,6 +111,8 @@ onMounted(() => {
 })
 
 async function load() {
+  authenticated.value = isAuthenticated()
+  filePath.value = loadFilePath()
   loading.value = true
   error.value = null
   tracks.value = []
@@ -238,6 +248,21 @@ async function fetchAllMetadata(trackList) {
 .track-info {
   flex: 1;
   overflow: hidden;
+}
+
+.track-quiz-chips {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.quiz-chip {
+  font-size: 11px;
+  padding: 0 5px;
+  min-width: 20px;
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
 }
 
 .track-name {

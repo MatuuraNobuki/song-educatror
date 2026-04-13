@@ -8,6 +8,8 @@ export const useQuizStore = defineStore('quiz', {
     progress: {},
     // グローバル設定
     shuffle: false,
+    // path_lower → { low: N, medium: N, high: N } 累積正解数
+    correctCounts: {},
   }),
   actions: {
     _key(path, difficulty) {
@@ -63,6 +65,16 @@ export const useQuizStore = defineStore('quiz', {
       const q = this.questions[this._key(path, difficulty)]
       return Array.isArray(q) && q.length > 0
     },
+    addCorrects(path, difficulty, delta) {
+      if (!this.correctCounts[path]) {
+        this.correctCounts[path] = { low: 0, medium: 0, high: 0 }
+      }
+      const next = (this.correctCounts[path][difficulty] ?? 0) + delta
+      this.correctCounts[path][difficulty] = Math.max(0, next)
+    },
+    clearCorrectCounts(path) {
+      delete this.correctCounts[path]
+    },
     prune(activePaths) {
       const pathSet = new Set(activePaths)
       const belongsToActive = (key) => {
@@ -75,6 +87,9 @@ export const useQuizStore = defineStore('quiz', {
       }
       for (const key of Object.keys(this.progress)) {
         if (!belongsToActive(key)) delete this.progress[key]
+      }
+      for (const path of Object.keys(this.correctCounts)) {
+        if (!pathSet.has(path)) delete this.correctCounts[path]
       }
     },
   },

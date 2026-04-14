@@ -80,6 +80,31 @@
         <div v-else class="text-empty">解説データがありません</div>
       </div>
 
+      <!-- ビジュアル -->
+      <div v-show="activeTab === 'visual'" class="tab-content visual-content">
+        <template v-if="visualPhase === 'idle'">
+          <div class="visual-idle">
+            <i class="pi pi-palette visual-idle-icon" />
+            <p class="visual-idle-title">ビジュアル</p>
+            <p class="visual-idle-desc">解説・画像からAIがインタラクティブなページを生成します</p>
+            <Message v-if="visualError" severity="error" :closable="false" class="visual-error">{{ visualError }}</Message>
+            <Button label="生成する" icon="pi pi-sparkles" class="visual-gen-btn" @click="generateVisual" />
+          </div>
+        </template>
+        <template v-else-if="visualPhase === 'generating'">
+          <div class="visual-generating">
+            <ProgressSpinner style="width: 48px; height: 48px" />
+            <p class="visual-generating-text">AIがビジュアルを生成しています…</p>
+          </div>
+        </template>
+        <template v-else-if="visualPhase === 'ready'">
+          <div class="visual-toolbar">
+            <Button icon="pi pi-refresh" label="再生成" text size="small" @click="generateVisual" />
+          </div>
+          <iframe class="visual-frame" :srcdoc="visualHtml" sandbox="allow-scripts" scrolling="yes" />
+        </template>
+      </div>
+
       <!-- テスト -->
       <div v-show="activeTab === 'quiz'" class="tab-content quiz-content">
 
@@ -295,9 +320,11 @@ import { getCached, setCached } from '../services/prefetchCache'
 import ImageViewer from '../components/ImageViewer.vue'
 import { useTrackMetadataStore } from '../stores/trackMetadataStore'
 import { useQuizStore } from '../stores/quizStore'
-import { generateQuizQuestions, validateAcceptAnswer } from '../services/claudeApi'
+import { useVisualStore } from '../stores/visualStore'
+import { generateQuizQuestions, validateAcceptAnswer, generateVisualHtml } from '../services/claudeApi'
 const metaStore = useTrackMetadataStore()
 const quizStore = useQuizStore()
+const visualStore = useVisualStore()
 
 const props = defineProps({
   track: { type: Object, required: true },
@@ -328,6 +355,7 @@ const tabs = [
   { value: 'lyrics', label: '歌詞' },
   { value: 'images', label: '画像' },
   { value: 'notes', label: '解説' },
+  { value: 'visual', label: 'ビジュアル' },
   { value: 'quiz', label: 'テスト' },
 ]
 
@@ -408,6 +436,8 @@ async function loadTrack(pathLower) {
   textReady.value = false
   error.value = null
   activeTab.value = 'info'
+  visualError.value = null
+  visualPhase.value = visualStore.get(pathLower) ? 'ready' : 'idle'
 
   // 1. IndexedDB プリフェッチキャッシュを確認（ヒット時は即反映して autoplay 可能に）
   const prefetched = await getCached(pathLower)
@@ -480,6 +510,32 @@ onUnmounted(() => {
   meta.value.extraPictures?.forEach((url) => URL.revokeObjectURL(url))
 })
 
+// ===== ビジュアル =====
+// 'idle' | 'generating' | 'ready'
+const visualPhase = ref('idle')
+const visualError = ref(null)
+
+const visualHtml = computed(() => visualStore.get(props.track.path_lower) ?? '')
+
+async function generateVisual() {
+  visualError.value = null
+  visualPhase.value = 'generating'
+  try {
+    const html = await generateVisualHtml(meta.value)
+    visualStore.set(props.track.path_lower, html)
+    visualPhase.value = 'ready'
+  } catch (e) {
+    visualError.value = e.message
+    visualPhase.value = 'idle'
+  }
+}
+
+// トラック変更時にフェーズをリセット（既存HTMLがあれば即ready）
+watch(() => props.track, () => {
+  visualError.value = null
+  visualPhase.value = visualStore.get(props.track.path_lower) ? 'ready' : 'idle'
+})
+
 // ===== クイズ =====
 // 'cover' | 'generating' | 'question' | 'feedback' | 'result'
 const quizPhase = ref('cover')
@@ -540,7 +596,9 @@ async function startGenerateQuiz(previousQuestions = null) {
   quizGenError.value = null
   quizPhase.value = 'generating'
   try {
-    const questions = await generateQuizQuestions(meta.value, previousQuestions, quizDifficulty.value)
+    const visualHtml = visualStore.get(props.track.path_lower)
+    const metaForQuiz = visualHtml ? { ...meta.value, visualHtml } : meta.value
+    const questions = await generateQuizQuestions(metaForQuiz, previousQuestions, quizDifficulty.value)
     quizStore.setQuestions(props.track.path_lower, quizDifficulty.value, questions)
     startNewSession()
   } catch (e) {
@@ -1499,5 +1557,80 @@ function regenerateQuiz() {
 .album-title {
   text-align: center;
   font-weight: bold;
+}
+
+/* ===== ビジュアル ===== */
+.visual-content {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px);
+  padding: 0;
+}
+
+.visual-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px 24px;
+  text-align: center;
+}
+
+.visual-idle-icon {
+  font-size: 48px;
+  color: var(--p-primary-color);
+  opacity: 0.6;
+}
+
+.visual-idle-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.visual-idle-desc {
+  font-size: 13px;
+  color: var(--p-text-muted-color);
+  line-height: 1.6;
+  margin: 0 0 4px;
+}
+
+.visual-error {
+  width: 100%;
+  font-size: 13px;
+}
+
+.visual-gen-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.visual-generating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 80px 24px;
+}
+
+.visual-generating-text {
+  font-size: 14px;
+  color: var(--p-text-muted-color);
+  margin: 0;
+}
+
+.visual-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--p-content-border-color);
+  flex-shrink: 0;
+}
+
+.visual-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
 }
 </style>

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { VISUAL_DESIGN_SKELETON } from "./visualDesignSkeleton.js";
 
 const STORAGE_KEY = "claude_api_key";
 
@@ -83,9 +84,9 @@ export async function generateQuizQuestions(meta, previousQuestions = null, diff
   // メッセージのコンテンツブロックを組み立て
   const contentBlocks = [];
 
-  // 画像（最大3枚）low難易度では使用しない
+  // 画像（最大10枚）low難易度では使用しない
   if (difficulty !== 'low' && meta.extraPictures?.length) {
-    for (const picUrl of meta.extraPictures.slice(0, 3)) {
+    for (const picUrl of meta.extraPictures.slice(0, 10)) {
       try {
         const { base64, mediaType } = await blobUrlToBase64(picUrl);
         // Anthropic が受け付けるメディアタイプのみ
@@ -167,6 +168,82 @@ answersフィールドのルール:
   }
 
   return questions;
+}
+
+/**
+ * 楽曲メタデータから視覚的・インタラクティブな HTML を生成する。
+ * @param {object} meta - { title, artist, lyrics, transcribedTextPreview, extraPictures }
+ * @returns {Promise<string>} HTML文字列
+ */
+export async function generateVisualHtml(meta) {
+  const client = createClient();
+  if (!client) throw new Error("APIキーが設定されていません。設定画面からAPIキーを登録してください。");
+
+  const contentBlocks = [];
+
+  // 画像（最大10枚）
+  if (meta.extraPictures?.length) {
+    for (const picUrl of meta.extraPictures.slice(0, 10)) {
+      try {
+        const { base64, mediaType } = await blobUrlToBase64(picUrl);
+        const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+        if (!allowed.includes(mediaType)) continue;
+        contentBlocks.push({
+          type: "image",
+          source: { type: "base64", media_type: mediaType, data: base64 },
+        });
+      } catch {
+        // 変換失敗は無視
+      }
+    }
+  }
+
+  const textParts = [];
+  if (meta.transcribedTextPreview) textParts.push(`【解説】\n${meta.transcribedTextPreview}`);
+
+  contentBlocks.push({ type: "text", text: textParts.join("\n\n") });
+
+  const systemPrompt = `あなたは教育アプリのビジュアルデザイナーAIです。
+提供された情報（解説・歌詞・画像など）をもとに、モバイル向けの視覚的なHTMLページを1つ作成してください。
+
+【必須】以下のデザイン骨格CSSを <head> 内にそのまま含めること:
+${VISUAL_DESIGN_SKELETON}
+
+デザイン骨格の使い方:
+- 追加スタイルが必要なら <style> を別途追加してよい
+
+ページ構成の指針:
+- 解説（transcribedText）の各セクション（#ヘッダー単位）を .section に分ける
+- 重要単語（**太字**や#ヘッダー部分）を .kw / .kw-blue / .kw-orange で強調する
+- 歌詞は .section 内に適切にレイアウトし、サビ・Aメロ等を区別する
+- 図解・フロー・比較が必要な箇所は .flow-row / .diagram-wrap / .card-grid / .steps を使う
+- .note-box でワンポイント解説や豆知識を入れる
+- .chip-row でキーワード一覧をまとめる
+- .page-footer で締めくくる
+
+その他の要件:
+- 完全なHTMLドキュメント（<!DOCTYPE html>から</html>まで）を出力する
+- <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"> を必ず含める
+- 提供された画像はページに含めない（src参照は使えない）
+- 外部CDNやネットワークリソースは使用しない（完全にオフラインで動作すること）
+- 確認テストやクイズは不要。解説・図解・歌詞レイアウトのみ
+- コードブロック・マークダウン記法・余分な説明は一切不要。HTMLのみ出力する`;
+
+  const stream = client.messages.stream({
+    model: "claude-sonnet-4-6",
+    max_tokens: 30000,
+    system: systemPrompt,
+    messages: [{ role: "user", content: contentBlocks }],
+  });
+
+  const message = await stream.finalMessage();
+
+  let html = message.content[0].text.trim();
+  // コードブロックで囲まれていた場合を除去
+  const fenceMatch = html.match(/```(?:html)?\s*([\s\S]*?)```/);
+  if (fenceMatch) html = fenceMatch[1].trim();
+
+  return html;
 }
 
 /**

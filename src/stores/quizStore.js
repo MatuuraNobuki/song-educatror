@@ -10,6 +10,8 @@ export const useQuizStore = defineStore('quiz', {
     shuffle: false,
     // path_lower → { low: N, medium: N, high: N } 累積正解数
     correctCounts: {},
+    // `${path_lower}:${difficulty}` → questionIndex[] 正解済み問題インデックス一覧
+    answeredCorrect: {},
   }),
   actions: {
     _key(path, difficulty) {
@@ -19,6 +21,7 @@ export const useQuizStore = defineStore('quiz', {
       const key = this._key(path, difficulty)
       this.questions[key] = questions
       delete this.progress[key]
+      delete this.answeredCorrect[key]
     },
     getQuestions(path, difficulty) {
       return this.questions[this._key(path, difficulty)] ?? null
@@ -65,6 +68,19 @@ export const useQuizStore = defineStore('quiz', {
       const q = this.questions[this._key(path, difficulty)]
       return Array.isArray(q) && q.length > 0
     },
+    // 問題を初めて正解したとき true を返す。既に正解済みなら false
+    markCorrect(path, difficulty, questionIndex) {
+      const key = this._key(path, difficulty)
+      if (!this.answeredCorrect[key]) this.answeredCorrect[key] = []
+      if (this.answeredCorrect[key].includes(questionIndex)) return false
+      this.answeredCorrect[key].push(questionIndex)
+      return true
+    },
+    unmarkCorrect(path, difficulty, questionIndex) {
+      const key = this._key(path, difficulty)
+      if (!this.answeredCorrect[key]) return
+      this.answeredCorrect[key] = this.answeredCorrect[key].filter(i => i !== questionIndex)
+    },
     addCorrects(path, difficulty, delta) {
       if (!this.correctCounts[path]) {
         this.correctCounts[path] = { low: 0, medium: 0, high: 0 }
@@ -90,6 +106,9 @@ export const useQuizStore = defineStore('quiz', {
       }
       for (const path of Object.keys(this.correctCounts)) {
         if (!pathSet.has(path)) delete this.correctCounts[path]
+      }
+      for (const key of Object.keys(this.answeredCorrect)) {
+        if (!belongsToActive(key)) delete this.answeredCorrect[key]
       }
     },
   },

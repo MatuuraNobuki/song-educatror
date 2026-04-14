@@ -31,6 +31,7 @@
               <div class="track-info">
                 <span class="track-name">{{ metadata[track.id]?.title ?? stripExt(track.name) }}</span>
               </div>
+              <i v-if="visualStore.get(track.path_lower)" class="pi pi-image track-visual-icon" title="ビジュアルあり" />
               <div class="track-quiz-chips">
                 <Tag severity="info" :value="quizStore.hasDifficulty(track.path_lower, 'low') ? (quizStore.correctCounts[track.path_lower]?.low ?? 0) : ''" class="quiz-chip" />
                 <Tag severity="success" :value="quizStore.hasDifficulty(track.path_lower, 'medium') ? (quizStore.correctCounts[track.path_lower]?.medium ?? 0) : ''" class="quiz-chip" />
@@ -63,10 +64,12 @@ import { fetchTrackMetadata } from '../services/trackMetadata'
 import { useTrackMetadataStore } from '../stores/trackMetadataStore'
 import { useAlbumCollapseStore } from '../stores/albumCollapseStore'
 import { useQuizStore } from '../stores/quizStore'
+import { useVisualStore } from '../stores/visualStore'
 
 const metaStore = useTrackMetadataStore()
 const albumStore = useAlbumCollapseStore()
 const quizStore = useQuizStore()
+const visualStore = useVisualStore()
 
 const authenticated = ref(false)
 const filePath = ref('')
@@ -248,6 +251,12 @@ async function fetchAllMetadata(trackList) {
 .track-info {
   flex: 1;
   overflow: hidden;
+}
+
+.track-visual-icon {
+  font-size: 13px;
+  color: var(--p-primary-color);
+  flex-shrink: 0;
 }
 
 .track-quiz-chips {

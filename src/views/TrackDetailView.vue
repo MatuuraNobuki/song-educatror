@@ -86,7 +86,7 @@
           <div class="visual-idle">
             <i class="pi pi-palette visual-idle-icon" />
             <p class="visual-idle-title">ビジュアル</p>
-            <p class="visual-idle-desc">解説・画像からAIがインタラクティブなページを生成します</p>
+            <p class="visual-idle-desc">解説・画像からAIがビジュアルなページを生成します</p>
             <Message v-if="visualError" severity="error" :closable="false" class="visual-error">{{ visualError }}</Message>
             <Button label="生成する" icon="pi pi-sparkles" class="visual-gen-btn" @click="generateVisual" />
           </div>
@@ -282,11 +282,9 @@
     </Dialog>
 
     <!-- ===== 下部固定プレイヤー ===== -->
-    <div class="player-bar">
+    <div class="player-bar" :class="{ 'player-bar--hidden': keyboardVisible }">
       <audio ref="audioEl" :src="meta.audioUrl" preload="metadata" :loop="repeatEnabled" v-if="meta.audioUrl" @timeupdate="onTimeUpdate" @loadedmetadata="onLoaded" @ended="playing = false" />
-      <Button icon="pi pi-step-backward" rounded text :disabled="!prevTrack" @click="navigateTo(prevTrack)" />
       <Button :icon="playing ? 'pi pi-pause' : 'pi pi-play'" rounded text class="play-btn" :disabled="!meta.audioUrl" @click="togglePlay" />
-      <Button icon="pi pi-step-forward" rounded text :disabled="!nextTrack" @click="navigateTo(nextTrack)" />
       <div class="player-progress">
         <span class="player-time">{{ formatTime(currentTime) }}</span>
         <Slider v-model="seekValue" :max="100" class="progress-slider" @change="onSeek" :disabled="!meta.audioUrl" />
@@ -500,7 +498,19 @@ function prefetchAdjacentTracks() {
   }
 }
 
-onMounted(() => loadTrack(props.track.path_lower))
+// ===== キーボード検知 =====
+const keyboardVisible = ref(false)
+
+function onViewportResize() {
+  if (!window.visualViewport) return
+  // visual viewport がwindow高さより150px以上小さければキーボード表示中とみなす
+  keyboardVisible.value = window.innerHeight - window.visualViewport.height > 150
+}
+
+onMounted(() => {
+  loadTrack(props.track.path_lower)
+  window.visualViewport?.addEventListener('resize', onViewportResize)
+})
 
 watch(() => props.track, (newTrack) => loadTrack(newTrack.path_lower))
 
@@ -508,6 +518,7 @@ onUnmounted(() => {
   if (audioEl.value) audioEl.value.pause()
   meta.value.pictures?.forEach((url) => URL.revokeObjectURL(url))
   meta.value.extraPictures?.forEach((url) => URL.revokeObjectURL(url))
+  window.visualViewport?.removeEventListener('resize', onViewportResize)
 })
 
 // ===== ビジュアル =====
@@ -664,7 +675,12 @@ function submitAnswer() {
   const answers = Array.isArray(q.answers) ? q.answers : [q.answers ?? q.answer]
   const correct = answers.some(a => normalize(userAnswer.value) === normalize(a))
   quizResults.value.push({ correct, userAnswer: userAnswer.value, answers })
-  if (correct) quizStore.addCorrects(props.track.path_lower, quizDifficulty.value, 1)
+  if (correct) {
+    const questionIndex = quizOrder.value[quizIndex.value]
+    if (quizStore.markCorrect(props.track.path_lower, quizDifficulty.value, questionIndex)) {
+      quizStore.addCorrects(props.track.path_lower, quizDifficulty.value, 1)
+    }
+  }
   acceptAsCorrect.value = false
   acceptReason.value = null
   quizPhase.value = 'feedback'
@@ -685,7 +701,9 @@ async function handleAcceptAsCorrect() {
       const questionIndex = quizOrder.value[quizIndex.value]
       quizStore.addAnswer(props.track.path_lower, quizDifficulty.value, questionIndex, userAnswer.value)
       quizResults.value[quizIndex.value] = { ...quizResults.value[quizIndex.value], correct: true, manuallyAccepted: true }
-      quizStore.addCorrects(props.track.path_lower, quizDifficulty.value, 1)
+      if (quizStore.markCorrect(props.track.path_lower, quizDifficulty.value, questionIndex)) {
+        quizStore.addCorrects(props.track.path_lower, quizDifficulty.value, 1)
+      }
       acceptReason.value = result.reason ?? null
       saveProgress()
     } else {
@@ -704,6 +722,7 @@ function revertAcceptAsCorrect() {
   const questionIndex = quizOrder.value[quizIndex.value]
   quizStore.removeAnswer(props.track.path_lower, quizDifficulty.value, questionIndex, userAnswer.value)
   quizResults.value[quizIndex.value] = { ...quizResults.value[quizIndex.value], correct: false, manuallyAccepted: false }
+  quizStore.unmarkCorrect(props.track.path_lower, quizDifficulty.value, questionIndex)
   quizStore.addCorrects(props.track.path_lower, quizDifficulty.value, -1)
   acceptReason.value = null
   saveProgress()
@@ -797,6 +816,11 @@ function regenerateQuiz() {
   padding-bottom: calc(6px + env(safe-area-inset-bottom));
   background: var(--p-content-background);
   border-top: 1px solid var(--p-content-border-color);
+  transition: transform 0.15s ease;
+}
+
+.player-bar--hidden {
+  transform: translateY(100%);
 }
 
 .play-btn {

@@ -1,5 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { VISUAL_DESIGN_SKELETON } from "./visualDesignSkeleton.js";
 
 const STORAGE_KEY = "claude_api_key";
 
@@ -39,8 +38,29 @@ async function blobUrlToBase64(blobUrl) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
-      const base64 = reader.result.split(",")[1];
-      resolve({ base64, mediaType: blob.type || "image/jpeg" });
+      const dataUrl = reader.result;
+      const base64 = dataUrl.split(",")[1];
+
+      // マジックバイトから実際の形式を判定（blob.type は信頼しない）
+      const binary = atob(base64.slice(0, 16));
+      const bytes = Array.from(binary).map((c) => c.charCodeAt(0));
+      let mediaType;
+      if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+        mediaType = "image/jpeg";
+      } else if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+        mediaType = "image/png";
+      } else if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+        mediaType = "image/gif";
+      } else if (
+        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+      ) {
+        mediaType = "image/webp";
+      } else {
+        mediaType = blob.type || "image/jpeg";
+      }
+
+      resolve({ base64, mediaType });
     };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
@@ -178,13 +198,31 @@ export async function generateVisualHtml(meta) {
   if (!client) throw new Error("APIキーが設定されていません。設定画面からAPIキーを登録してください。");
 
   const contentBlocks = [];
+  const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
-  // 画像（最大10枚）
+  // メイン画像（配色参照用、最大3枚）
+  let hasPictures = false;
+  if (meta.pictures?.length) {
+    for (const picUrl of meta.pictures.slice(0, 3)) {
+      try {
+        const { base64, mediaType } = await blobUrlToBase64(picUrl);
+        if (!allowed.includes(mediaType)) continue;
+        contentBlocks.push({
+          type: "image",
+          source: { type: "base64", media_type: mediaType, data: base64 },
+        });
+        hasPictures = true;
+      } catch {
+        // 変換失敗は無視
+      }
+    }
+  }
+
+  // 解説画像（最大10枚）
   if (meta.extraPictures?.length) {
     for (const picUrl of meta.extraPictures.slice(0, 10)) {
       try {
         const { base64, mediaType } = await blobUrlToBase64(picUrl);
-        const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
         if (!allowed.includes(mediaType)) continue;
         contentBlocks.push({
           type: "image",
@@ -197,51 +235,149 @@ export async function generateVisualHtml(meta) {
   }
 
   const textParts = [];
+  if (meta.lyrics) textParts.push(`【歌詞】\n${meta.lyrics}`);
   if (meta.transcribedTextPreview) textParts.push(`【解説】\n${meta.transcribedTextPreview}`);
 
   contentBlocks.push({ type: "text", text: textParts.join("\n\n") });
 
+  const colorInstruction = hasPictures
+    ? `冒頭のメイン画像の色調を読み取り、その雰囲気に合った値を設定してください（可読性は必ず確保すること）。`
+    : `落ち着いたダークトーンになるよう値を設定してください。`;
+
+  // 歌詞を空行区切りで分割してブロック一覧を作成
+  const lyricBlocks = (meta.lyrics ?? "").trim().split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
+
   const systemPrompt = `あなたは教育アプリのビジュアルデザイナーAIです。
-提供された情報（解説・歌詞・画像など）をもとに、モバイル向けの視覚的なHTMLページを1つ作成してください。
+提供された歌詞・解説・画像をもとに、以下のJSONのみを出力してください。
 
-【必須】以下のデザイン骨格CSSを <head> 内にそのまま含めること:
-${VISUAL_DESIGN_SKELETON}
+## 出力するJSONの仕様
 
-デザイン骨格の使い方:
-- 追加スタイルが必要なら <style> を別途追加してよい
+\`\`\`json
+{
+  "cssVars": {
+    "--color-bg": "#...",
+    "--color-bg2": "#...",
+    "--color-text": "#...",
+    "--color-text-sub": "#...",
+    "--color-accent": "#...",
+    "--color-accent2": "#...",
+    "--color-accent3": "#...",
+    "--color-block-bg": "#...",
+    "--color-intro-bg": "#...",
+    "--color-chorus-bg": "#...",
+    "--color-tooltip-bg": "#...",
+    "--color-tooltip-text": "#...",
+    "--color-underline": "#..."
+  },
+  "introNote": "楽曲背景の1〜2文（不要なら空文字）",
+  "blockLabels": [
+    { "blockIndex": 0, "label": "サビ", "isChorus": true },
+    { "blockIndex": 1, "label": "Aメロ", "isChorus": false }
+  ],
+  "annotations": [
+    { "word": "共通フレーム", "key": "kyotsu_frame" }
+  ],
+  "tooltipData": {
+    "kyotsu_frame": { "title": "共通フレーム", "body": "1〜2文の説明。" }
+  }
+}
+\`\`\`
 
-ページ構成の指針:
-- 解説（transcribedText）の各セクション（#ヘッダー単位）を .section に分ける
-- 重要単語（**太字**や#ヘッダー部分）を .kw / .kw-blue / .kw-orange で強調する
-- 歌詞は .section 内に適切にレイアウトし、サビ・Aメロ等を区別する
-- 図解・フロー・比較が必要な箇所は .flow-row / .diagram-wrap / .card-grid / .steps を使う
-- .note-box でワンポイント解説や豆知識を入れる
-- .chip-row でキーワード一覧をまとめる
-- .page-footer で締めくくる
+## cssVars の指定方針
+${colorInstruction}
 
-その他の要件:
-- 完全なHTMLドキュメント（<!DOCTYPE html>から</html>まで）を出力する
-- <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"> を必ず含める
-- 提供された画像はページに含めない（src参照は使えない）
-- 外部CDNやネットワークリソースは使用しない（完全にオフラインで動作すること）
-- 確認テストやクイズは不要。解説・図解・歌詞レイアウトのみ
-- コードブロック・マークダウン記法・余分な説明は一切不要。HTMLのみ出力する`;
+## blockLabels の指定方針
+- 歌詞は空行区切りで ${lyricBlocks.length} ブロックに分かれている（インデックス 0〜${lyricBlocks.length - 1}）
+- 各ブロックに「サビ」「Aメロ」「Bメロ」「アウトロ」等のラベルを付ける
+- サビ（繰り返しブロック）は isChorus: true にする
+- ラベル不要なブロックは blockLabels に含めなくてよい
 
-  const stream = client.messages.stream({
+## annotations の指定方針
+- 解説に登場するキーワード・重要語句が歌詞中にあれば列挙する
+- 曲のために短縮・変形されているものもあるが、解説と照らし合わせて推測すること
+- 同じ語句は1つだけ登録すれば全ブロックに適用される
+
+## tooltipData の指定方針
+- key は annotations の key と一致させる
+- body は解説から抜き出した簡潔な説明（1〜2文）
+
+## 出力要件
+- JSONのみ出力する。コードブロック・マークダウン・余分な説明は不要`;
+
+  const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 30000,
+    max_tokens: 8000,
     system: systemPrompt,
     messages: [{ role: "user", content: contentBlocks }],
   });
 
-  const message = await stream.finalMessage();
+  const rawText = message.content[0].text.trim();
+  const fenceMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const jsonText = fenceMatch ? fenceMatch[1].trim() : rawText;
+  const aiData = JSON.parse(jsonText);
 
-  let html = message.content[0].text.trim();
-  // コードブロックで囲まれていた場合を除去
-  const fenceMatch = html.match(/```(?:html)?\s*([\s\S]*?)```/);
-  if (fenceMatch) html = fenceMatch[1].trim();
+  return buildVisualHtml(lyricBlocks, aiData);
+}
 
-  return html;
+/**
+ * 歌詞ブロック配列 + AIデータから { cssVars, bodyHtml, tooltipData } を組み立てる。
+ * @param {string[]} lyricBlocks - 空行区切りで分割済みの歌詞ブロック
+ * @param {{ cssVars, introNote, blockLabels, annotations, tooltipData }} aiData
+ * @returns {{ cssVars: object, bodyHtml: string, tooltipData: object }}
+ */
+function buildVisualHtml(lyricBlocks, { cssVars = {}, blockLabels = [], annotations = [], tooltipData = {} }) {
+  // アノテーション適用：長い語句優先・単一パスで二重ラップなし
+  const sortedAnnotations = [...annotations].sort((a, b) => b.word.length - a.word.length);
+
+  function annotateText(text) {
+    const out = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    if (sortedAnnotations.length === 0) return out;
+
+    // HTML エスケープ済みの語句→key マップ
+    const escapedToKey = new Map(
+      sortedAnnotations.map(({ word, key }) => [
+        word.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+        key,
+      ])
+    );
+
+    // 全語句を OR で繋いだ単一正規表現（左から順に試すので長い語句が先にマッチ）
+    const pattern = [...escapedToKey.keys()]
+      .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|");
+
+    return out.replace(new RegExp(pattern, "g"), (match) => {
+      const key = escapedToKey.get(match);
+      return `<span class="annotated" data-key="${key}">${match}</span>`;
+    });
+  }
+
+  // blockLabels をインデックスで引けるマップに
+  const labelMap = Object.fromEntries(blockLabels.map((b) => [b.blockIndex, b]));
+
+  // 歌詞ブロック → HTML
+  const blocksHtml = lyricBlocks.map((block, i) => {
+    const blockMeta = labelMap[i];
+    const isChorus = blockMeta?.isChorus ?? false;
+    const label = blockMeta?.label ?? "";
+    const lines = block.split("\n");
+    const labelHtml = label ? `\n  <span class="block-label">${label}</span>` : "";
+    const linesHtml = lines.map((l) => `  <span class="lyric-line">${annotateText(l)}</span>`).join("\n");
+    return `<div class="${isChorus ? "lyric-block chorus" : "lyric-block"}">${labelHtml}\n${linesHtml}\n</div>`;
+  }).join("\n");
+
+  return { cssVars, bodyHtml: blocksHtml, tooltipData };
+}
+
+/**
+ * AIなしでプレーンな歌詞HTMLを即時生成する（初期表示用）。
+ * デフォルト配色・アノテーションなし。
+ * @param {object} meta - { title, lyrics }
+ * @returns {string} HTML文字列
+ */
+export function buildPlainVisualHtml(meta) {
+  const lyricBlocks = (meta.lyrics ?? "").trim().split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
+  return buildVisualHtml(lyricBlocks, {});
 }
 
 /**

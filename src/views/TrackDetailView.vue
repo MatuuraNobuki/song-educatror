@@ -58,10 +58,10 @@
       </div>
 
       <!-- 歌詞 -->
-      <div v-show="activeTab === 'lyrics'" class="tab-content">
+      <!-- <div v-show="activeTab === 'lyrics'" class="tab-content">
         <div v-if="meta.lyrics" class="text-block lyrics-block">{{ meta.lyrics }}</div>
         <div v-else class="text-empty">歌詞データがありません</div>
-      </div>
+      </div> -->
 
       <!-- 画像 -->
       <div v-show="activeTab === 'images'" class="tab-content">
@@ -75,33 +75,44 @@
       <ImageViewer :visible="viewerVisible" :src="viewerSrc" @close="viewerVisible = false" />
 
       <!-- 解説 -->
-      <div v-show="activeTab === 'notes'" class="tab-content">
+      <!-- <div v-show="activeTab === 'notes'" class="tab-content">
         <div v-if="meta.transcribedTextPreview" class="text-block text-preview md-preview" v-html="parsedTranscribedText"></div>
         <div v-else class="text-empty">解説データがありません</div>
-      </div>
+      </div> -->
 
       <!-- ビジュアル -->
-      <div v-show="activeTab === 'visual'" class="tab-content visual-content">
-        <template v-if="visualPhase === 'idle'">
+      <div v-show="activeTab === 'lyrics'" class="tab-content visual-content">
+        <template v-if="meta.lyrics">
+          <!-- 歌詞本体 -->
+          <div class="visual-body" :style="visualCssVars" v-html="visualBodyHtml" @click="onVisualClick" ref="visualBodyRef" />
+          <!-- ツールチップ -->
+          <Teleport to="body">
+            <div v-if="tooltip.visible" class="visual-tooltip" :style="tooltip.style">
+              <div class="visual-tooltip-title">{{ tooltip.title }}</div>
+              <div>{{ tooltip.body }}</div>
+            </div>
+          </Teleport>
+          <!-- idle: 生成ボタンオーバーレイ -->
+          <div v-if="visualPhase === 'idle'" class="visual-overlay">
+            <Message v-if="visualError" severity="error" :closable="false" class="visual-error">{{ visualError }}</Message>
+            <Button icon="pi pi-sparkles" class="visual-gen-btn" @click="generateVisual" />
+          </div>
+          <!-- generating: スピナーオーバーレイ -->
+          <div v-else-if="visualPhase === 'generating'" class="visual-overlay">
+            <ProgressSpinner style="width: 48px; height: 48px" />
+          </div>
+          <!-- ready: ツールバー -->
+          <div v-else-if="visualPhase === 'ready'" class="visual-toolbar">
+            <Button icon="pi pi-refresh" label="再生成" text size="small" @click="generateVisual" />
+            <Button icon="pi pi-trash" label="破棄" text size="small" severity="secondary" @click="discardVisual" />
+          </div>
+        </template>
+        <!-- 歌詞なし -->
+        <template v-else>
           <div class="visual-idle">
             <i class="pi pi-palette visual-idle-icon" />
-            <p class="visual-idle-title">ビジュアル</p>
-            <p class="visual-idle-desc">解説・画像からAIがビジュアルなページを生成します</p>
-            <Message v-if="visualError" severity="error" :closable="false" class="visual-error">{{ visualError }}</Message>
-            <Button label="生成する" icon="pi pi-sparkles" class="visual-gen-btn" @click="generateVisual" />
+            <p class="visual-idle-desc">歌詞データがありません</p>
           </div>
-        </template>
-        <template v-else-if="visualPhase === 'generating'">
-          <div class="visual-generating">
-            <ProgressSpinner style="width: 48px; height: 48px" />
-            <p class="visual-generating-text">AIがビジュアルを生成しています…</p>
-          </div>
-        </template>
-        <template v-else-if="visualPhase === 'ready'">
-          <div class="visual-toolbar">
-            <Button icon="pi pi-refresh" label="再生成" text size="small" @click="generateVisual" />
-          </div>
-          <iframe class="visual-frame" :srcdoc="visualHtml" sandbox="allow-scripts" scrolling="yes" />
         </template>
       </div>
 
@@ -302,7 +313,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import Button from 'primevue/button'
 import Divider from 'primevue/divider'
 import Message from 'primevue/message'
@@ -319,7 +330,7 @@ import ImageViewer from '../components/ImageViewer.vue'
 import { useTrackMetadataStore } from '../stores/trackMetadataStore'
 import { useQuizStore } from '../stores/quizStore'
 import { useVisualStore } from '../stores/visualStore'
-import { generateQuizQuestions, validateAcceptAnswer, generateVisualHtml } from '../services/claudeApi'
+import { generateQuizQuestions, validateAcceptAnswer, generateVisualHtml, buildPlainVisualHtml } from '../services/claudeApi'
 const metaStore = useTrackMetadataStore()
 const quizStore = useQuizStore()
 const visualStore = useVisualStore()
@@ -352,8 +363,6 @@ const tabs = [
   { value: 'info', label: '基本情報' },
   { value: 'lyrics', label: '歌詞' },
   { value: 'images', label: '画像' },
-  { value: 'notes', label: '解説' },
-  { value: 'visual', label: 'ビジュアル' },
   { value: 'quiz', label: 'テスト' },
 ]
 
@@ -525,15 +534,82 @@ onUnmounted(() => {
 // 'idle' | 'generating' | 'ready'
 const visualPhase = ref('idle')
 const visualError = ref(null)
+const visualBodyRef = ref(null)
 
-const visualHtml = computed(() => visualStore.get(props.track.path_lower) ?? '')
+const visualData = computed(() =>
+  visualStore.get(props.track.path_lower) ?? (meta.value.lyrics ? buildPlainVisualHtml(meta.value) : null)
+)
+const visualCssVars = computed(() => {
+  const vars = visualData.value?.cssVars ?? {}
+  return Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, v]))
+})
+const visualBodyHtml = computed(() => visualData.value?.bodyHtml ?? '')
+const visualTooltipData = computed(() => visualData.value?.tooltipData ?? {})
+
+// ツールチップ
+const tooltip = reactive({ visible: false, title: '', body: '', style: {} })
+const activeAnnotated = ref(null)
+
+function showTooltip(el, clientX, clientY) {
+  const key = el.dataset.key
+  const data = visualTooltipData.value[key]
+  if (!data) return
+  tooltip.title = data.title
+  tooltip.body = data.body
+  activeAnnotated.value?.classList.remove('active')
+  el.classList.add('active')
+  activeAnnotated.value = el
+  const tw = Math.min(320, window.innerWidth * 0.88)
+  const th = 120
+  let left = clientX - tw / 2
+  let top = clientY - th - 16
+  if (left < 8) left = 8
+  if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8
+  if (top < 8) top = clientY + 24
+  if (top + th > window.innerHeight - 8) top = clientY - th - 8
+  if (top < 8) top = 8
+  tooltip.style = { left: left + 'px', top: top + 'px', maxWidth: tw + 'px' }
+  tooltip.visible = true
+}
+
+function hideTooltip() {
+  tooltip.visible = false
+  activeAnnotated.value?.classList.remove('active')
+  activeAnnotated.value = null
+}
+
+function onVisualClick(e) {
+  const ann = e.target.closest?.('.annotated')
+  if (ann) {
+    activeAnnotated.value === ann ? hideTooltip() : showTooltip(ann, e.clientX, e.clientY)
+    e.stopPropagation()
+  } else {
+    hideTooltip()
+  }
+}
+
+// touchstart は passive: false が必要なので手動登録
+watch(visualBodyRef, (el) => {
+  if (!el) return
+  el.addEventListener('touchstart', (e) => {
+    const ann = e.target.closest?.('.annotated')
+    if (ann) {
+      const t = e.touches[0]
+      activeAnnotated.value === ann ? hideTooltip() : showTooltip(ann, t.clientX, t.clientY)
+      e.preventDefault()
+      e.stopPropagation()
+    } else {
+      hideTooltip()
+    }
+  }, { passive: false })
+})
 
 async function generateVisual() {
   visualError.value = null
   visualPhase.value = 'generating'
   try {
-    const html = await generateVisualHtml(meta.value)
-    visualStore.set(props.track.path_lower, html)
+    const data = await generateVisualHtml(meta.value)
+    visualStore.set(props.track.path_lower, data)
     visualPhase.value = 'ready'
   } catch (e) {
     visualError.value = e.message
@@ -541,10 +617,18 @@ async function generateVisual() {
   }
 }
 
-// トラック変更時にフェーズをリセット（既存HTMLがあれば即ready）
+function discardVisual() {
+  visualStore.remove(props.track.path_lower)
+  visualPhase.value = 'idle'
+  visualError.value = null
+  hideTooltip()
+}
+
+// トラック変更時にフェーズをリセット（既存データがあれば即ready）
 watch(() => props.track, () => {
   visualError.value = null
   visualPhase.value = visualStore.get(props.track.path_lower) ? 'ready' : 'idle'
+  hideTooltip()
 })
 
 // ===== クイズ =====
@@ -1110,7 +1194,6 @@ function regenerateQuiz() {
   object-fit: contain;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   cursor: zoom-in;
-  active-opacity: 0.8;
 }
 
 .p-divider {
@@ -1587,8 +1670,9 @@ function regenerateQuiz() {
 .visual-content {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px);
+  height: calc(100vh - 172px);
   padding: 0;
+  position: relative;
 }
 
 .visual-idle {
@@ -1625,8 +1709,22 @@ function regenerateQuiz() {
 }
 
 .visual-gen-btn {
-  width: 100%;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
   justify-content: center;
+  box-shadow:0px 0px 10px #55555555 ;
+}
+
+.visual-overlay {
+  position: absolute;
+  bottom: 10px;
+  right: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  z-index: 10;
 }
 
 .visual-generating {
@@ -1651,10 +1749,111 @@ function regenerateQuiz() {
   flex-shrink: 0;
 }
 
-.visual-frame {
+.visual-body {
   flex: 1;
-  width: 100%;
-  border: none;
-  background: #fff;
+  overflow-y: auto;
+  background-color: var(--color-bg, #f0f5f0);
+  color: var(--color-text, #2a3a2a);
+  font-size: 16px;
+  line-height: 1.9;
+}
+
+:deep(.intro-note) {
+  background: var(--color-intro-bg, #d7ead7);
+  border-left: 4px solid var(--color-accent, #2e7d32);
+  margin: 0 0 8px 0;
+  padding: 18px 20px 16px 20px;
+  font-size: 13.5px;
+  color: var(--color-text-sub, #4a6a4a);
+  line-height: 1.7;
+}
+
+:deep(.lyric-block) {
+  background: var(--color-block-bg, #fff);
+  margin: 0 0 2px 0;
+  padding: 22px 24px 18px 24px;
+  border-bottom: 1px solid var(--color-bg2, #e4ede4);
+}
+
+:deep(.lyric-block.chorus) {
+  background: var(--color-chorus-bg, #c8e6c9);
+  border-left: 4px solid var(--color-accent, #2e7d32);
+}
+
+:deep(.block-label) {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--color-accent2, #81c784);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+:deep(.lyric-block.chorus .block-label) {
+  color: var(--color-accent, #2e7d32);
+}
+
+:deep(.lyric-line) {
+  display: block;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+  padding: 1px 0;
+}
+
+:deep(.annotated) {
+  cursor: pointer;
+  border-bottom: 2px solid var(--color-underline, #2e7d32);
+  padding-bottom: 1px;
+  color: var(--color-accent, #2e7d32);
+  font-weight: 600;
+  transition: background 0.15s;
+  border-radius: 2px;
+}
+
+:deep(.annotated:active),
+:deep(.annotated.active) {
+  background: var(--color-accent3, #a5d6a7);
+  color: var(--color-text, #2a3a2a);
+}
+
+:deep(.page-footer) {
+  text-align: center;
+  padding: 30px 20px 10px 20px;
+  font-size: 12px;
+  color: var(--color-text-sub, #4a6a4a);
+  opacity: 0.7;
+  letter-spacing: 0.06em;
+}
+
+:deep(.page-footer span) {
+  display: inline-block;
+  border-top: 1px solid var(--color-accent2, #81c784);
+  padding-top: 12px;
+  min-width: 140px;
+}
+
+.visual-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: var(--color-tooltip-bg, #1b5e20);
+  color: var(--color-tooltip-text, #f1f8e9);
+  font-size: 13px;
+  line-height: 1.65;
+  padding: 12px 15px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+
+.visual-tooltip-title {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--color-accent3, #a5d6a7);
+  letter-spacing: 0.08em;
+  margin-bottom: 5px;
+  text-transform: uppercase;
 }
 </style>

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-const MAX_ENTRIES = 10
+const MAX_ENTRIES = 5000
 
 export const useVisualStore = defineStore('visual', {
   state: () => ({

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>{{TITLE}}</title>
+  <style>
+    :root {
+      /* @@CSS_VARS@@ */
+      --color-bg: #f0f5f0;
+      --color-bg2: #e4ede4;
+      --color-text: #2a3a2a;
+      --color-text-sub: #4a6a4a;
+      --color-accent: #2e7d32;
+      --color-accent2: #81c784;
+      --color-accent3: #a5d6a7;
+      --color-block-bg: #ffffff;
+      --color-intro-bg: #d7ead7;
+      --color-chorus-bg: #c8e6c9;
+      --color-tooltip-bg: #1b5e20;
+      --color-tooltip-text: #f1f8e9;
+      --color-underline: #2e7d32;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--color-bg);
+      color: var(--color-text);
+      font-size: 16px;
+      line-height: 1.9;
+      padding: 0;
+      min-height: 100vh;
+    }
+
+    .intro-note {
+      background: var(--color-intro-bg);
+      border-left: 4px solid var(--color-accent);
+      margin: 0 0 8px 0;
+      padding: 18px 20px 16px 20px;
+      font-size: 13.5px;
+      color: var(--color-text-sub);
+      line-height: 1.7;
+    }
+
+    .intro-note strong {
+      color: var(--color-accent);
+      font-weight: 700;
+    }
+
+    .intro-note .section-label {
+      display: inline-block;
+      background: var(--color-accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 3px;
+      padding: 1px 8px;
+      margin-bottom: 7px;
+      letter-spacing: 0.08em;
+    }
+
+    .lyric-block {
+      background: var(--color-block-bg);
+      margin: 0 0 2px 0;
+      padding: 22px 24px 18px 24px;
+      border-bottom: 1px solid var(--color-bg2);
+    }
+
+    .lyric-block.chorus {
+      background: var(--color-chorus-bg);
+      border-left: 4px solid var(--color-accent);
+    }
+
+    .block-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--color-accent2);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    .lyric-block.chorus .block-label {
+      color: var(--color-accent);
+    }
+
+    .lyric-line {
+      display: block;
+      font-size: 17px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      color: var(--color-text);
+      margin-bottom: 2px;
+      padding: 1px 0;
+    }
+
+    .lyric-line-en {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--color-accent);
+      letter-spacing: 0.05em;
+    }
+
+    .annotated {
+      position: relative;
+      cursor: pointer;
+      border-bottom: 2px solid var(--color-underline);
+      padding-bottom: 1px;
+      color: var(--color-accent);
+      font-weight: 600;
+      transition: background 0.15s;
+      border-radius: 2px;
+    }
+
+    .annotated:hover,
+    .annotated.active {
+      background: var(--color-accent3);
+      color: var(--color-text);
+    }
+
+    .tooltip {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      background: var(--color-tooltip-bg);
+      color: var(--color-tooltip-text);
+      font-size: 13px;
+      line-height: 1.65;
+      padding: 12px 15px;
+      border-radius: 8px;
+      max-width: min(320px, 88vw);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+      pointer-events: none;
+      transition: opacity 0.18s;
+      opacity: 0;
+    }
+
+    .tooltip.visible {
+      display: block;
+      opacity: 1;
+    }
+
+    .tooltip .tooltip-title {
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--color-accent3);
+      letter-spacing: 0.08em;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+
+    .page-footer {
+      text-align: center;
+      padding: 30px 20px 10px 20px;
+      font-size: 12px;
+      color: var(--color-text-sub);
+      opacity: 0.7;
+      letter-spacing: 0.06em;
+    }
+
+    .page-footer span {
+      display: inline-block;
+      border-top: 1px solid var(--color-accent2);
+      padding-top: 12px;
+      min-width: 140px;
+    }
+  </style>
+</head>
+
+<body>
+<!-- @@BODY_CONTENT@@ -->
+  <div class="tooltip" id="tooltip">
+    <div class="tooltip-title" id="tooltip-title"></div>
+    <div id="tooltip-body"></div>
+  </div>
+
+  <script>
+    var tooltipData = {}; // @@TOOLTIP_DATA@@
+
+    var tooltip = document.getElementById('tooltip');
+    var tooltipTitle = document.getElementById('tooltip-title');
+    var tooltipBody = document.getElementById('tooltip-body');
+    var currentActive = null;
+    function showTooltip(el, event) {
+      var key = el.getAttribute('data-key');
+      var data = tooltipData[key];
+      if (!data) return;
+      tooltipTitle.textContent = data.title;
+      tooltipBody.textContent = data.body;
+      if (currentActive && currentActive !== el) currentActive.classList.remove('active');
+      el.classList.add('active');
+      currentActive = el;
+      tooltip.style.display = 'block';
+      tooltip.classList.remove('visible');
+      var touch = event.touches ? event.touches[0] : event;
+      var x = touch.clientX, y = touch.clientY;
+      var tw = Math.min(320, window.innerWidth * 0.88), th = 120;
+      var left = x - tw / 2, top = y - th - 16;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+      if (top < 8) top = y + 24;
+      if (top + th > window.innerHeight - 8) top = y - th - 8;
+      if (top < 8) top = 8;
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+      tooltip.style.maxWidth = tw + 'px';
+      setTimeout(function () { tooltip.classList.add('visible'); }, 10);
+    }
+    function hideTooltip() {
+      tooltip.classList.remove('visible');
+      setTimeout(function () { tooltip.style.display = 'none'; }, 180);
+      if (currentActive) { currentActive.classList.remove('active'); currentActive = null; }
+    }
+    document.addEventListener('click', function (e) {
+      var ann = e.target.closest ? e.target.closest('.annotated') : null;
+      if (ann) { currentActive === ann ? hideTooltip() : showTooltip(ann, e); e.stopPropagation(); }
+      else hideTooltip();
+    });
+    document.addEventListener('touchstart', function (e) {
+      var ann = e.target.closest ? e.target.closest('.annotated') : null;
+      if (ann) { currentActive === ann ? hideTooltip() : showTooltip(ann, e); e.preventDefault(); e.stopPropagation(); }
+      else hideTooltip();
+    }, { passive: false });
+  </script>
+</body>
+
+</html>

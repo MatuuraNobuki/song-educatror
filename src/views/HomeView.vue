@@ -266,7 +266,7 @@ async function fetchAllMetadata(trackList) {
 }
 
 .quiz-chip {
-  font-size: 11px;
+  font-size: 8px;
   padding: 0 5px;
   min-width: 20px;
   height: 20px;

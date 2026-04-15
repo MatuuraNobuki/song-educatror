@@ -92,19 +92,18 @@
               <div>{{ tooltip.body }}</div>
             </div>
           </Teleport>
-          <!-- idle: 生成ボタンオーバーレイ -->
-          <div v-if="visualPhase === 'idle'" class="visual-overlay">
+          <!-- ビジュアル操作ボタン（常時表示） -->
+          <div class="visual-overlay">
             <Message v-if="visualError" severity="error" :closable="false" class="visual-error">{{ visualError }}</Message>
-            <Button icon="pi pi-sparkles" class="visual-gen-btn" @click="generateVisual" />
-          </div>
-          <!-- generating: スピナーオーバーレイ -->
-          <div v-else-if="visualPhase === 'generating'" class="visual-overlay">
-            <ProgressSpinner style="width: 48px; height: 48px" />
-          </div>
-          <!-- ready: ツールバー -->
-          <div v-else-if="visualPhase === 'ready'" class="visual-toolbar">
-            <Button icon="pi pi-refresh" label="再生成" text size="small" @click="generateVisual" />
-            <Button icon="pi pi-trash" label="破棄" text size="small" severity="secondary" @click="discardVisual" />
+            <div class="visual-speeddial-container">
+              <SpeedDial
+                :model="visualSpeedDialItems"
+                direction="up"
+                :showIcon="['pi ',visualPhase === 'generating' ? 'pi-spin pi-spinner' : 'pi-plus']"
+                class="visual-speeddial"
+                :disabled="visualPhase === 'generating'"
+              />
+            </div>
           </div>
         </template>
         <!-- 歌詞なし -->
@@ -137,14 +136,7 @@
             <Message v-if="quizGenError" severity="error" :closable="false" class="quiz-gen-error">{{ quizGenError }}</Message>
           </div>
           <div class="quiz-difficulty-btns">
-            <Button
-              v-for="d in ['low', 'medium', 'high']"
-              :key="d"
-              :label="DIFFICULTY_LABELS[d]"
-              :severity="{ low: 'info', medium: 'success', high: 'warn' }[d]"
-              class="quiz-submit-btn"
-              @click="startQuiz(d)"
-            />
+            <Button v-for="d in ['low', 'medium', 'high']" :key="d" :label="DIFFICULTY_LABELS[d]" :severity="{ low: 'info', medium: 'success', high: 'warn' }[d]" class="quiz-submit-btn" @click="startQuiz(d)" />
           </div>
         </template>
 
@@ -323,6 +315,7 @@ import ToggleSwitch from 'primevue/toggleswitch'
 import InputText from 'primevue/inputtext'
 import Checkbox from 'primevue/checkbox'
 import Dialog from 'primevue/dialog'
+import SpeedDial from 'primevue/speeddial'
 import { marked } from 'marked'
 import { fetchTrackMetadata } from '../services/trackMetadata'
 import { getCached, setCached } from '../services/prefetchCache'
@@ -533,6 +526,7 @@ onUnmounted(() => {
 // ===== ビジュアル =====
 // 'idle' | 'generating' | 'ready'
 const visualPhase = ref('idle')
+
 const visualError = ref(null)
 const visualBodyRef = ref(null)
 
@@ -603,6 +597,23 @@ watch(visualBodyRef, (el) => {
     }
   }, { passive: false })
 })
+
+const visualSpeedDialItems = computed(() => {
+  if (visualPhase.value === 'idle') {
+    return [
+      { label: '生成', icon: 'pi pi-sparkles', command: generateVisual },
+    ]
+  }
+  if (visualPhase.value === 'ready') {
+    return [
+      { label: '再生成', icon: 'pi pi-refresh', command: generateVisual },
+      { label: '破棄', icon: 'pi pi-trash', command: discardVisual },
+    ]
+  }
+  return []
+})
+
+
 
 async function generateVisual() {
   visualError.value = null
@@ -692,7 +703,12 @@ async function startGenerateQuiz(previousQuestions = null) {
   quizPhase.value = 'generating'
   try {
     const visualHtml = visualStore.get(props.track.path_lower)
-    const metaForQuiz = visualHtml ? { ...meta.value, visualHtml } : meta.value
+    const tooltipData = visualTooltipData.value
+    const metaForQuiz = {
+      ...meta.value,
+      ...(visualHtml ? { visualHtml } : {}),
+      ...(Object.keys(tooltipData).length ? { tooltipData } : {}),
+    }
     const questions = await generateQuizQuestions(metaForQuiz, previousQuestions, quizDifficulty.value)
     quizStore.setQuestions(props.track.path_lower, quizDifficulty.value, questions)
     startNewSession()
@@ -1013,9 +1029,11 @@ function regenerateQuiz() {
   overflow-y: scroll;
   overflow-x: hidden
 }
+
 .tab-content {
   justify-content: space-between;
 }
+
 /* アートワーク */
 .artwork-scroll {
   display: flex;
@@ -1035,9 +1053,11 @@ function regenerateQuiz() {
   justify-content: center;
   padding: 30px 16px;
 }
-.albumTitle{
+
+.albumTitle {
   text-align: center;
 }
+
 .artwork {
   width: 350px;
   height: 350px;
@@ -1670,7 +1690,7 @@ function regenerateQuiz() {
 .visual-content {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 172px);
+  height: calc(100vh - 147px);
   padding: 0;
   position: relative;
 }
@@ -1708,18 +1728,10 @@ function regenerateQuiz() {
   font-size: 13px;
 }
 
-.visual-gen-btn {
-  border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  justify-content: center;
-  box-shadow:0px 0px 10px #55555555 ;
-}
-
 .visual-overlay {
   position: absolute;
-  bottom: 10px;
-  right: 30px;
+  bottom: 20px;
+  right: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1727,26 +1739,29 @@ function regenerateQuiz() {
   z-index: 10;
 }
 
-.visual-generating {
+.visual-speeddial-container {
+  position: relative;
+}
+
+.visual-speeddial {
+  position: static;
+}
+
+.visual-gen-spinner-overlay {
+  position: absolute;
+  inset: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 80px 24px;
-}
-
-.visual-generating-text {
-  font-size: 14px;
-  color: var(--p-text-muted-color);
-  margin: 0;
-}
-
-.visual-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--p-content-border-color);
-  flex-shrink: 0;
+  justify-content: center;
+  background: var(--p-primary-color);
+  border-radius: 50%;
+  color: white;
+  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  bottom: 20px;
+  right: 20px;
+  pointer-events: none;
 }
 
 .visual-body {
@@ -1844,7 +1859,7 @@ function regenerateQuiz() {
   line-height: 1.65;
   padding: 12px 15px;
   border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   pointer-events: none;
 }
 

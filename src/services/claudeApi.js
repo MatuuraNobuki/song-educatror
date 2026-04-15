@@ -51,10 +51,7 @@ async function blobUrlToBase64(blobUrl) {
         mediaType = "image/png";
       } else if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
         mediaType = "image/gif";
-      } else if (
-        bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
-      ) {
+      } else if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
         mediaType = "image/webp";
       } else {
         mediaType = blob.type || "image/jpeg";
@@ -77,7 +74,7 @@ const DIFFICULTY_PROMPTS = {
   medium: `5問すべてを解説・画像から重要単語[重要単語]を答えさせる問題にしてください。`,
 
   high: `5問すべてを解説・画像から重要単語[重要単語]の説明を求めたり理由を確認する、中程度の文章で回答させる問題にしてください。`,
-}
+};
 
 /**
  * 楽曲メタデータをもとに Claude でクイズ5問を生成する。
@@ -86,14 +83,20 @@ const DIFFICULTY_PROMPTS = {
  * @param {'low'|'medium'|'high'} [difficulty] - 難易度
  * @returns {Promise<Array>} QuizQuestion[]
  */
-export async function generateQuizQuestions(meta, previousQuestions = null, difficulty = 'medium') {
+export async function generateQuizQuestions(meta, previousQuestions = null, difficulty = "medium") {
   const client = createClient();
   if (!client) throw new Error("APIキーが設定されていません。設定画面からAPIキーを登録してください。");
 
   // テキスト情報を組み立て
   const textParts = [];
-  if (meta.lyrics) textParts.push(`【歌詞】\n${meta.lyrics}`);
-  if (difficulty !== 'low' && meta.transcribedTextPreview) textParts.push(`【解説・楽曲情報】\n${meta.transcribedTextPreview}`);
+  if (difficulty == "low" && meta.lyrics) textParts.push(`【歌詞】\n${meta.lyrics}`);
+  if (difficulty == "high" && meta.transcribedTextPreview) textParts.push(`【解説・楽曲情報】\n${meta.transcribedTextPreview}`);
+  if (meta.tooltipData && Object.keys(meta.tooltipData).length) {
+    const tooltipLines = Object.values(meta.tooltipData)
+      .map(({ title, body }) => `・${title}：${body}`)
+      .join("\n");
+    if (difficulty == "medium") textParts.push(`【重要キーワード解説】\n${tooltipLines}`);
+  }
   if (previousQuestions?.length) {
     const prevList = previousQuestions.map((q, i) => `${i + 1}. ${q.question}`).join("\n");
     textParts.push(`【作成済みの問題（これらとは異なる問題を作成すること）】\n${prevList}`);
@@ -105,7 +108,7 @@ export async function generateQuizQuestions(meta, previousQuestions = null, diff
   const contentBlocks = [];
 
   // 画像（最大10枚）low難易度では使用しない
-  if (difficulty !== 'low' && meta.extraPictures?.length) {
+  if (difficulty == "high" && meta.extraPictures?.length) {
     for (const picUrl of meta.extraPictures.slice(0, 10)) {
       try {
         const { base64, mediaType } = await blobUrlToBase64(picUrl);
@@ -124,7 +127,7 @@ export async function generateQuizQuestions(meta, previousQuestions = null, diff
 
   contentBlocks.push({ type: "text", text: userText });
 
-  const difficultyInstruction = DIFFICULTY_PROMPTS[difficulty] ?? DIFFICULTY_PROMPTS.medium
+  const difficultyInstruction = DIFFICULTY_PROMPTS[difficulty] ?? DIFFICULTY_PROMPTS.medium;
 
   const systemPrompt = `あなたは音楽教育アプリのクイズ作成AIです。
 提供された楽曲情報（歌詞・解説・画像など）をもとに、学習に役立つ入力式クイズを正確に5問作成してください。
@@ -154,6 +157,7 @@ answersフィールドのルール:
 - 問題は楽曲の内容・歌詞・背景知識・画像の内容から出題する
 - 問題同士で回答が重複しないようにする
 - 同じ問いを繰り返さない
+- 問題文にマークダウンは不要
 - 別の問題同士で回答を重複させない
 - idは1〜5の連番にする
 - JSONのみ出力する`;
@@ -245,7 +249,11 @@ export async function generateVisualHtml(meta) {
     : `落ち着いたダークトーンになるよう値を設定してください。`;
 
   // 歌詞を空行区切りで分割してブロック一覧を作成
-  const lyricBlocks = (meta.lyrics ?? "").trim().split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
+  const lyricBlocks = (meta.lyrics ?? "")
+    .trim()
+    .split(/\n\n+/)
+    .map((b) => b.trim())
+    .filter(Boolean);
 
   const systemPrompt = `あなたは教育アプリのビジュアルデザイナーAIです。
 提供された歌詞・解説・画像をもとに、以下のJSONのみを出力してください。
@@ -288,13 +296,14 @@ ${colorInstruction}
 
 ## blockLabels の指定方針
 - 歌詞は空行区切りで ${lyricBlocks.length} ブロックに分かれている（インデックス 0〜${lyricBlocks.length - 1}）
-- 各ブロックに「サビ」「Aメロ」「Bメロ」「アウトロ」等のラベルを付ける
+- 各ブロックに「サビ」「Aメロ」「Bメロ」「ブリッジ」「フック」等のラベルを付ける
 - サビ（繰り返しブロック）は isChorus: true にする
 - ラベル不要なブロックは blockLabels に含めなくてよい
 
 ## annotations の指定方針
-- 解説に登場するキーワード・重要語句が歌詞中にあれば列挙する
-- 曲のために短縮・変形されているものもあるが、解説と照らし合わせて推測すること
+- 解説に登場するキーワードが歌詞中にあれば列挙する
+- 重要語句でなくても解説文中の実例やたとえ話に登場している語句ば指定すること
+- 曲のために短縮・変形・分割されているものもあるが、解説と照らし合わせて推測し、キーワードとして指定すること
 - 同じ語句は1つだけ登録すれば全ブロックに適用される
 
 ## tooltipData の指定方針
@@ -334,17 +343,10 @@ function buildVisualHtml(lyricBlocks, { cssVars = {}, blockLabels = [], annotati
     if (sortedAnnotations.length === 0) return out;
 
     // HTML エスケープ済みの語句→key マップ
-    const escapedToKey = new Map(
-      sortedAnnotations.map(({ word, key }) => [
-        word.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
-        key,
-      ])
-    );
+    const escapedToKey = new Map(sortedAnnotations.map(({ word, key }) => [word.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), key]));
 
     // 全語句を OR で繋いだ単一正規表現（左から順に試すので長い語句が先にマッチ）
-    const pattern = [...escapedToKey.keys()]
-      .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-      .join("|");
+    const pattern = [...escapedToKey.keys()].map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
 
     return out.replace(new RegExp(pattern, "g"), (match) => {
       const key = escapedToKey.get(match);
@@ -356,15 +358,17 @@ function buildVisualHtml(lyricBlocks, { cssVars = {}, blockLabels = [], annotati
   const labelMap = Object.fromEntries(blockLabels.map((b) => [b.blockIndex, b]));
 
   // 歌詞ブロック → HTML
-  const blocksHtml = lyricBlocks.map((block, i) => {
-    const blockMeta = labelMap[i];
-    const isChorus = blockMeta?.isChorus ?? false;
-    const label = blockMeta?.label ?? "";
-    const lines = block.split("\n");
-    const labelHtml = label ? `\n  <span class="block-label">${label}</span>` : "";
-    const linesHtml = lines.map((l) => `  <span class="lyric-line">${annotateText(l)}</span>`).join("\n");
-    return `<div class="${isChorus ? "lyric-block chorus" : "lyric-block"}">${labelHtml}\n${linesHtml}\n</div>`;
-  }).join("\n");
+  const blocksHtml = lyricBlocks
+    .map((block, i) => {
+      const blockMeta = labelMap[i];
+      const isChorus = blockMeta?.isChorus ?? false;
+      const label = blockMeta?.label ?? "";
+      const lines = block.split("\n");
+      const labelHtml = label ? `\n  <span class="block-label">${label}</span>` : "";
+      const linesHtml = lines.map((l) => `  <span class="lyric-line">${annotateText(l)}</span>`).join("\n");
+      return `<div class="${isChorus ? "lyric-block chorus" : "lyric-block"}">${labelHtml}\n${linesHtml}\n</div>`;
+    })
+    .join("\n");
 
   return { cssVars, bodyHtml: blocksHtml, tooltipData };
 }
@@ -376,7 +380,11 @@ function buildVisualHtml(lyricBlocks, { cssVars = {}, blockLabels = [], annotati
  * @returns {string} HTML文字列
  */
 export function buildPlainVisualHtml(meta) {
-  const lyricBlocks = (meta.lyrics ?? "").trim().split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
+  const lyricBlocks = (meta.lyrics ?? "")
+    .trim()
+    .split(/\n\n+/)
+    .map((b) => b.trim())
+    .filter(Boolean);
   return buildVisualHtml(lyricBlocks, {});
 }
 

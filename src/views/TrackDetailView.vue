@@ -163,8 +163,6 @@ watch(() => props.track, (newTrack) => {
 
 onUnmounted(() => {
   playerBarRef.value?.reset()
-  meta.value.pictures?.forEach(url => URL.revokeObjectURL(url))
-  meta.value.extraPictures?.forEach(url => URL.revokeObjectURL(url))
   window.visualViewport?.removeEventListener('resize', onViewportResize)
 })
 

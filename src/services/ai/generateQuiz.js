@@ -12,6 +12,9 @@ import quizSystemBase from '../../prompts/quizSystem.txt?raw'
  * @returns {Promise<Array>} QuizQuestion[]
  */
 export async function generateQuizQuestions(meta, previousQuestions = null, difficulty = 'medium') {
+  if (difficulty == 'medium' && (!meta?.tooltipData || Object.keys(meta.tooltipData).length === 0)) {
+    throw new Error('キーワード解説データがありません。先に歌詞の解説を生成してください。')
+  }
 
   // テキスト情報を組み立て
   const textParts = []

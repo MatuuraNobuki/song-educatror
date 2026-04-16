@@ -30,12 +30,13 @@
               <span class="track-number">{{ trackNum(metadata[track.id]?.trackNumber) }}</span>
               <div class="track-info">
                 <span class="track-name">{{ metadata[track.id]?.title ?? stripExt(track.name) }}</span>
+                <span v-if="lyricsPreview(metadata[track.id]?.lyrics)" class="track-lyrics-preview">{{ lyricsPreview(metadata[track.id]?.lyrics) }}</span>
               </div>
               <i v-if="visualStore.get(track.path_lower)" class="pi pi-image track-visual-icon" title="ビジュアルあり" />
               <div class="track-quiz-chips">
-                <Tag severity="info" :value="quizStore.hasDifficulty(track.path_lower, 'low') ? (quizStore.correctCounts[track.path_lower]?.low ?? 0) : ''" class="quiz-chip" />
-                <Tag severity="success" :value="quizStore.hasDifficulty(track.path_lower, 'medium') ? (quizStore.correctCounts[track.path_lower]?.medium ?? 0) : ''" class="quiz-chip" />
-                <Tag severity="warn" :value="quizStore.hasDifficulty(track.path_lower, 'high') ? (quizStore.correctCounts[track.path_lower]?.high ?? 0) : ''" class="quiz-chip" />
+                <Tag severity="info" :value="quizStore.hasDifficulty(track.path_lower, 'low') ? (quizStore.correctCounts[track.path_lower]?.low ?? 0) : ''" :class="['quiz-chip', { 'quiz-chip--hot': (quizStore.correctCounts[track.path_lower]?.low ?? 0) > 4 && quizStore.hasDifficulty(track.path_lower, 'low') }]" />
+                <Tag severity="success" :value="quizStore.hasDifficulty(track.path_lower, 'medium') ? (quizStore.correctCounts[track.path_lower]?.medium ?? 0) : ''" :class="['quiz-chip', { 'quiz-chip--hot': (quizStore.correctCounts[track.path_lower]?.medium ?? 0) > 4 && quizStore.hasDifficulty(track.path_lower, 'medium') }]" />
+                <Tag severity="warn" :value="quizStore.hasDifficulty(track.path_lower, 'high') ? (quizStore.correctCounts[track.path_lower]?.high ?? 0) : ''" :class="['quiz-chip', { 'quiz-chip--hot': (quizStore.correctCounts[track.path_lower]?.high ?? 0) > 4 && quizStore.hasDifficulty(track.path_lower, 'high') }]" />
               </div>
             </div>
           </div>
@@ -105,6 +106,12 @@ function trackNum(val) {
 
 function stripExt(name) {
   return name.replace(/\.[^.]+$/, '')
+}
+
+function lyricsPreview(lyrics) {
+  if (!lyrics) return ''
+  const lines = lyrics.split('\n').map(l => l.trim()).filter(l => l && !/^\[/.test(l))
+  return lines.slice(0, 2).join('  ')
 }
 
 onMounted(() => {
@@ -274,12 +281,27 @@ async function fetchAllMetadata(trackList) {
   text-align: center;
 }
 
+:deep(.quiz-chip--hot) {
+  outline: 1.5px solid var(--p-primary-color);
+  font-weight: 700;
+}
+
 .track-name {
   font-size: 14px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
+}
+
+.track-lyrics-preview {
+  font-size: 11px;
+  color: var(--p-text-muted-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  margin-top: 2px;
 }
 
 .empty-state {

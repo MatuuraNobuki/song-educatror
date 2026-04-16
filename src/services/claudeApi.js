@@ -201,52 +201,9 @@ export async function generateVisualHtml(meta) {
   const client = createClient();
   if (!client) throw new Error("APIキーが設定されていません。設定画面からAPIキーを登録してください。");
 
-  const contentBlocks = [];
-  const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-
-  // メイン画像（配色参照用、最大3枚）
-  let hasPictures = false;
-  if (meta.pictures?.length) {
-    for (const picUrl of meta.pictures.slice(0, 3)) {
-      try {
-        const { base64, mediaType } = await blobUrlToBase64(picUrl);
-        if (!allowed.includes(mediaType)) continue;
-        contentBlocks.push({
-          type: "image",
-          source: { type: "base64", media_type: mediaType, data: base64 },
-        });
-        hasPictures = true;
-      } catch {
-        // 変換失敗は無視
-      }
-    }
-  }
-
-  // 解説画像（最大10枚）
-  if (meta.extraPictures?.length) {
-    for (const picUrl of meta.extraPictures.slice(0, 10)) {
-      try {
-        const { base64, mediaType } = await blobUrlToBase64(picUrl);
-        if (!allowed.includes(mediaType)) continue;
-        contentBlocks.push({
-          type: "image",
-          source: { type: "base64", media_type: mediaType, data: base64 },
-        });
-      } catch {
-        // 変換失敗は無視
-      }
-    }
-  }
-
   const textParts = [];
   if (meta.lyrics) textParts.push(`【歌詞】\n${meta.lyrics}`);
   if (meta.transcribedTextPreview) textParts.push(`【解説】\n${meta.transcribedTextPreview}`);
-
-  contentBlocks.push({ type: "text", text: textParts.join("\n\n") });
-
-  const colorInstruction = hasPictures
-    ? `冒頭のメイン画像の色調を読み取り、その雰囲気に合った値を設定してください（可読性は必ず確保すること）。`
-    : `落ち着いたダークトーンになるよう値を設定してください。`;
 
   // 歌詞を空行区切りで分割してブロック一覧を作成
   const lyricBlocks = (meta.lyrics ?? "")
@@ -256,32 +213,13 @@ export async function generateVisualHtml(meta) {
     .filter(Boolean);
 
   const systemPrompt = `あなたは教育アプリのビジュアルデザイナーAIです。
-提供された歌詞・解説・画像をもとに、以下のJSONのみを出力してください。
+提供された歌詞・解説をもとに、以下のJSONのみを出力してください。
 
 ## 出力するJSONの仕様
 
 \`\`\`json
 {
-  "cssVars": {
-    "--color-bg": "#...",
-    "--color-bg2": "#...",
-    "--color-text": "#...",
-    "--color-text-sub": "#...",
-    "--color-accent": "#...",
-    "--color-accent2": "#...",
-    "--color-accent3": "#...",
-    "--color-block-bg": "#...",
-    "--color-intro-bg": "#...",
-    "--color-chorus-bg": "#...",
-    "--color-tooltip-bg": "#...",
-    "--color-tooltip-text": "#...",
-    "--color-underline": "#..."
-  },
   "introNote": "楽曲背景の1〜2文（不要なら空文字）",
-  "blockLabels": [
-    { "blockIndex": 0, "label": "サビ", "isChorus": true },
-    { "blockIndex": 1, "label": "Aメロ", "isChorus": false }
-  ],
   "annotations": [
     { "word": "共通フレーム", "key": "kyotsu_frame" }
   ],
@@ -291,18 +229,9 @@ export async function generateVisualHtml(meta) {
 }
 \`\`\`
 
-## cssVars の指定方針
-${colorInstruction}
-
-## blockLabels の指定方針
-- 歌詞は空行区切りで ${lyricBlocks.length} ブロックに分かれている（インデックス 0〜${lyricBlocks.length - 1}）
-- 各ブロックに「サビ」「Aメロ」「Bメロ」「ブリッジ」「フック」等のラベルを付ける
-- サビ（繰り返しブロック）は isChorus: true にする
-- ラベル不要なブロックは blockLabels に含めなくてよい
-
 ## annotations の指定方針
 - 解説に登場するキーワードが歌詞中にあれば列挙する
-- 重要語句でなくても解説文中の実例やたとえ話に登場している語句ば指定すること
+- 重要語句でなくても解説文中の実例やたとえ話に登場している語句は指定すること
 - 曲のために短縮・変形・分割されているものもあるが、解説と照らし合わせて推測し、キーワードとして指定すること
 - 同じ語句は1つだけ登録すれば全ブロックに適用される
 
@@ -315,9 +244,9 @@ ${colorInstruction}
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 8000,
+    max_tokens: 4000,
     system: systemPrompt,
-    messages: [{ role: "user", content: contentBlocks }],
+    messages: [{ role: "user", content: textParts.join("\n\n") }],
   });
 
   const rawText = message.content[0].text.trim();
@@ -334,7 +263,7 @@ ${colorInstruction}
  * @param {{ cssVars, introNote, blockLabels, annotations, tooltipData }} aiData
  * @returns {{ cssVars: object, bodyHtml: string, tooltipData: object }}
  */
-function buildVisualHtml(lyricBlocks, { cssVars = {}, blockLabels = [], annotations = [], tooltipData = {} }) {
+function buildVisualHtml(lyricBlocks, { annotations = [], tooltipData = {} }) {
   // アノテーション適用：長い語句優先・単一パスで二重ラップなし
   const sortedAnnotations = [...annotations].sort((a, b) => b.word.length - a.word.length);
 
@@ -354,23 +283,16 @@ function buildVisualHtml(lyricBlocks, { cssVars = {}, blockLabels = [], annotati
     });
   }
 
-  // blockLabels をインデックスで引けるマップに
-  const labelMap = Object.fromEntries(blockLabels.map((b) => [b.blockIndex, b]));
-
   // 歌詞ブロック → HTML
   const blocksHtml = lyricBlocks
-    .map((block, i) => {
-      const blockMeta = labelMap[i];
-      const isChorus = blockMeta?.isChorus ?? false;
-      const label = blockMeta?.label ?? "";
+    .map((block) => {
       const lines = block.split("\n");
-      const labelHtml = label ? `\n  <span class="block-label">${label}</span>` : "";
       const linesHtml = lines.map((l) => `  <span class="lyric-line">${annotateText(l)}</span>`).join("\n");
-      return `<div class="${isChorus ? "lyric-block chorus" : "lyric-block"}">${labelHtml}\n${linesHtml}\n</div>`;
+      return `<div class="lyric-block">\n${linesHtml}\n</div>`;
     })
     .join("\n");
 
-  return { cssVars, bodyHtml: blocksHtml, tooltipData };
+  return { bodyHtml: blocksHtml, tooltipData };
 }
 
 /**

@@ -20,7 +20,8 @@
       "Bash(powershell -ExecutionPolicy Bypass -File \"S:\\\\projects\\\\song-educatror\\\\gen-icons.ps1\")",
       "Skill(claude-api)",
       "Skill(claude-api:*)",
-      "Bash(npx vue-tsc:*)"
+      "Bash(npx vue-tsc:*)",
+      "Bash(find /s/projects/song-educatror/src -type f \\\\\\( -name \"*.vue\" -o -name \"*.js\" -o -name \"*.json\" \\\\\\) -exec wc -l {} +)"
     ]
   }
 }

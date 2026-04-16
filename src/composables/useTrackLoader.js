@@ -65,7 +65,10 @@ export function useTrackLoader(props, { getPlaying }) {
     // 2. インメモリキャッシュ（Pinia）でテキスト系を即反映
     const inMemory = metaStore.cache[pathLower]
     if (inMemory) {
-      Object.assign(meta.value, inMemory)
+      Object.assign(meta.value, {
+        ...inMemory,
+        pictures: metaStore.getPictures(pathLower),
+      })
       textReady.value = true
     }
 

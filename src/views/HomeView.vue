@@ -28,11 +28,19 @@
           <div v-if="albumStore.isExpanded(album)" class="track-list">
             <div v-for="track in albumTracks" :key="track.id" class="track-row" @click="$emit('select-track', { track, albumTracks })">
               <span class="track-number">{{ trackNum(metadata[track.id]?.trackNumber) }}</span>
+              <div class="track-cover-wrap">
+                <img
+                  v-if="metadata[track.id]?.pictures?.[0]"
+                  :src="metadata[track.id].pictures[0]"
+                  class="track-cover"
+                  alt=""
+                >
+                <i v-else class="pi pi-image track-cover-fallback" />
+              </div>
               <div class="track-info">
                 <span class="track-name">{{ metadata[track.id]?.title ?? stripExt(track.name) }}</span>
                 <span v-if="lyricsPreview(metadata[track.id]?.lyrics)" class="track-lyrics-preview">{{ lyricsPreview(metadata[track.id]?.lyrics) }}</span>
               </div>
-              <i v-if="visualStore.get(track.path_lower)" class="pi pi-image track-visual-icon" title="ビジュアルあり" />
               <div class="track-quiz-chips">
                 <Tag severity="info" :value="quizStore.hasDifficulty(track.path_lower, 'low') ? (quizStore.correctCounts[track.path_lower]?.low ?? 0) : ''" :class="['quiz-chip', { 'quiz-chip--hot': (quizStore.correctCounts[track.path_lower]?.low ?? 0) > 4 && quizStore.hasDifficulty(track.path_lower, 'low') }]" />
                 <Tag severity="success" :value="quizStore.hasDifficulty(track.path_lower, 'medium') ? (quizStore.correctCounts[track.path_lower]?.medium ?? 0) : ''" :class="['quiz-chip', { 'quiz-chip--hot': (quizStore.correctCounts[track.path_lower]?.medium ?? 0) > 4 && quizStore.hasDifficulty(track.path_lower, 'medium') }]" />
@@ -131,20 +139,22 @@ async function load() {
     tracks.value = await listAllTracks(filePath.value)
 
     // キャッシュ済みはストアから即反映、未キャッシュのみフェッチ
-    const missing = []
+    const toRefresh = []
     for (const track of tracks.value) {
       const cached = metaStore.cache[track.path_lower]
       if (cached) {
-        metadata[track.id] = cached
-      } else {
-        missing.push(track)
+        metadata[track.id] = {
+          ...cached,
+          pictures: metaStore.getPictures(track.path_lower),
+        }
       }
+      toRefresh.push(track)
     }
 
     // 現在のリストにないパスをストアから削除
     metaStore.prune(tracks.value.map(t => t.path_lower))
 
-    fetchAllMetadata(missing)
+    fetchAllMetadata(toRefresh)
   } catch (e) {
     error.value = e.message
   } finally {
@@ -162,9 +172,12 @@ async function fetchAllMetadata(trackList) {
     try {
       const meta = await fetchTrackMetadata(track.path_lower)
       metaStore.set(track.path_lower, meta)
-      metadata[track.id] = metaStore.cache[track.path_lower]
+      metadata[track.id] = {
+        ...metaStore.cache[track.path_lower],
+        pictures: metaStore.getPictures(track.path_lower),
+      }
     } catch {
-      metadata[track.id] = {}
+      if (!metadata[track.id]) metadata[track.id] = {}
     }
     await next()
   }
@@ -230,14 +243,14 @@ async function fetchAllMetadata(trackList) {
 .track-list {
   display: flex;
   flex-direction: column;
-  padding-left: 8px;
+  padding-left: 0px;
 }
 
 .track-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 6px;
+  padding: 10px 0px;
   border-bottom: 1px solid var(--p-content-border-color);
   cursor: pointer;
   transition: background 0.15s;
@@ -258,6 +271,29 @@ async function fetchAllMetadata(trackList) {
 .track-info {
   flex: 1;
   overflow: hidden;
+}
+
+.track-cover-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--p-content-hover-background);
+  border: 1px solid var(--p-content-border-color);
+}
+
+.track-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.track-cover-fallback {
+  font-size: 12px;
+  color: var(--p-text-muted-color);
 }
 
 .track-visual-icon {
@@ -295,7 +331,7 @@ async function fetchAllMetadata(trackList) {
 }
 
 .track-lyrics-preview {
-  font-size: 11px;
+  font-size: 8px;
   color: var(--p-text-muted-color);
   white-space: nowrap;
   overflow: hidden;

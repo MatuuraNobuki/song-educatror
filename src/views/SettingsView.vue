@@ -118,7 +118,7 @@ import {
   loadFilePath,
   saveFilePath as persistFilePath,
 } from '../services/dropboxAuth'
-import { loadApiKey, saveApiKey } from '../services/claudeApi'
+import { loadApiKey, saveApiKey } from '../services/ai/client'
 
 const toast = useToast()
 

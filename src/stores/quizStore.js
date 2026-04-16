@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { normalize } from '../utils/normalize'
 
 export const useQuizStore = defineStore('quiz', {
   state: () => ({
@@ -41,18 +42,14 @@ export const useQuizStore = defineStore('quiz', {
       if (!Array.isArray(q.answers)) {
         q.answers = [q.answers ?? q.answer]
       }
-      const norm = (s) => s.trim().replace(/\s+/g, '').toLowerCase()
-        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-      if (!q.answers.some(a => norm(a) === norm(answer))) {
+      if (!q.answers.some(a => normalize(a) === normalize(answer))) {
         q.answers.push(answer)
       }
     },
     removeAnswer(path, difficulty, questionIndex, answer) {
       const q = this.questions[this._key(path, difficulty)]?.[questionIndex]
       if (!q || !Array.isArray(q.answers)) return
-      const norm = (s) => s.trim().replace(/\s+/g, '').toLowerCase()
-        .replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-      q.answers = q.answers.filter(a => norm(a) !== norm(answer))
+      q.answers = q.answers.filter(a => normalize(a) !== normalize(answer))
     },
     removeTrack(path) {
       // 該当トラックの全難易度データを削除

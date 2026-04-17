@@ -47,14 +47,14 @@ const props = defineProps({
 
 const emit = defineEmits(['generate', 'discard'])
 
-const { visualBodyRef, tooltip, onVisualClick, registerTouchHandler } = useVisualTooltip()
-
-function handleClick(e) {
-  onVisualClick(e, props.visualTooltipData)
-}
+const { visualBodyRef, tooltip, onVisualClick, registerTouchHandler, setTooltipData } = useVisualTooltip()
 
 watch(visualBodyRef, (el) => {
   registerTouchHandler(el, props.visualTooltipData)
+})
+
+watch(() => props.visualTooltipData, (data) => {
+  setTooltipData(data)
 })
 
 const visualSpeedDialItems = computed(() => {

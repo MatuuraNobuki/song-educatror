@@ -7,7 +7,7 @@
         :src="src"
         class="extra-image"
         :alt="`image ${i + 1}`"
-        @click="$emit('open-viewer', src)"
+        @click="$emit('open-viewer', i)"
       />
     </div>
     <div v-else class="text-empty">追加画像がありません</div>

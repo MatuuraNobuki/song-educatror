@@ -12,6 +12,7 @@
           <button class="viewer-btn" @click="zoomIn" :disabled="scale >= MAX_SCALE">
             <i class="pi pi-plus" />
           </button>
+          <span v-if="images.length > 1" class="page-label">{{ currentIndex + 1 }} / {{ images.length }}</span>
           <button class="viewer-btn viewer-close" @click="close">
             <i class="pi pi-times" />
           </button>
@@ -26,7 +27,7 @@
           @click.self="close"
         >
           <img
-            :src="src"
+            :src="currentSrc"
             class="viewer-image"
             :style="{
               transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
@@ -42,26 +43,31 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
-  visible: { type: Boolean, required: true },
-  src:     { type: String, default: '' },
+  visible:    { type: Boolean, required: true },
+  images:     { type: Array, default: () => [] },
+  startIndex: { type: Number, default: 0 },
 })
 const emit = defineEmits(['close'])
 
 const MIN_SCALE = 1
 const MAX_SCALE = 8
 const ZOOM_STEP = 0.5
+const SWIPE_THRESHOLD = 60
+
+const currentIndex = ref(0)
+const currentSrc = computed(() => props.images[currentIndex.value] ?? '')
 
 const scale = ref(1)
 const tx = ref(0)
 const ty = ref(0)
 const isGesturing = ref(false)
 
-// src が変わったらリセット
-watch(() => props.src, reset)
-watch(() => props.visible, (v) => { if (v) reset() })
+watch(() => props.visible, (v) => {
+  if (v) { currentIndex.value = props.startIndex; reset() }
+})
 
 function reset() {
   scale.value = 1
@@ -71,6 +77,13 @@ function reset() {
 
 function close() {
   emit('close')
+}
+
+function goPrev() {
+  if (currentIndex.value > 0) { currentIndex.value--; reset() }
+}
+function goNext() {
+  if (currentIndex.value < props.images.length - 1) { currentIndex.value++; reset() }
 }
 
 // ───── ボタンズーム ─────
@@ -90,12 +103,14 @@ let initialPinchDist = 0
 let initialScale = 1
 let lastTapMs = 0
 
-// パン用
 let panActive = false
 let panStartX = 0
 let panStartY = 0
 let panOriginTx = 0
 let panOriginTy = 0
+
+let swipeStartX = 0
+let swipeStartY = 0
 
 function dist(touches) {
   const dx = touches[0].clientX - touches[1].clientX
@@ -109,12 +124,18 @@ function onTouchStart(e) {
     initialPinchDist = dist(e.touches)
     initialScale = scale.value
     panActive = false
-  } else if (e.touches.length === 1 && scale.value > 1) {
-    panActive = true
-    panStartX = e.touches[0].clientX
-    panStartY = e.touches[0].clientY
-    panOriginTx = tx.value
-    panOriginTy = ty.value
+  } else if (e.touches.length === 1) {
+    swipeStartX = e.touches[0].clientX
+    swipeStartY = e.touches[0].clientY
+    if (scale.value > MIN_SCALE) {
+      panActive = true
+      panStartX = e.touches[0].clientX
+      panStartY = e.touches[0].clientY
+      panOriginTx = tx.value
+      panOriginTy = ty.value
+    } else {
+      panActive = false
+    }
   }
 }
 
@@ -132,11 +153,20 @@ function onTouchEnd(e) {
   isGesturing.value = false
   panActive = false
 
-  // ズームが 1x に戻ったら位置もリセット
   if (scale.value <= MIN_SCALE) { tx.value = 0; ty.value = 0 }
 
-  // ダブルタップ検出（シングルタップのみ）
   if (e.changedTouches.length === 1) {
+    const dx = e.changedTouches[0].clientX - swipeStartX
+    const dy = e.changedTouches[0].clientY - swipeStartY
+
+    // スワイプで前後ナビゲーション（scale=1のときのみ）
+    if (scale.value <= MIN_SCALE && Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) goNext(); else goPrev()
+      lastTapMs = 0
+      return
+    }
+
+    // ダブルタップ検出
     const now = Date.now()
     if (now - lastTapMs < 280) {
       scale.value > 1 ? reset() : setScale(2.5)
@@ -202,6 +232,12 @@ function onTouchEnd(e) {
   color: rgba(255, 255, 255, 0.7);
   min-width: 44px;
   text-align: center;
+}
+
+.page-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-left: 8px;
 }
 
 /* 画像ステージ */

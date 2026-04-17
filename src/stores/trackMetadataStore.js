@@ -57,6 +57,15 @@ export const useTrackMetadataStore = defineStore('trackMetadata', {
         return []
       }
     },
+    remove(path) {
+      delete this.cache[path]
+      const pics = pictureCache.get(path) ?? []
+      pics.forEach((url) => URL.revokeObjectURL(url))
+      pictureCache.delete(path)
+      const idx = pictureFifo.indexOf(path)
+      if (idx !== -1) pictureFifo.splice(idx, 1)
+      deleteBlobs(path).catch(() => {})
+    },
     prune(activePaths) {
       const pathSet = new Set(activePaths)
       for (const key of Object.keys(this.cache)) {

@@ -6,6 +6,7 @@
       <div class="detail-header">
         <Button icon="pi pi-arrow-left" text rounded @click="$emit('back')" />
         <span class="header-title">{{ meta.title }}</span>
+        <Button icon="pi pi-trash" text rounded severity="danger" @click="confirmDeleteTrackData" />
       </div>
       <div v-if="textReady" class="tab-nav">
         <button v-for="tab in tabs" :key="tab.value" class="tab-btn" :class="{ active: activeTab === tab.value }" @click="activeTab = tab.value">{{ tab.label }}</button>
@@ -28,7 +29,7 @@
         <TrackImagesTab :extra-pictures="meta.extraPictures" @open-viewer="openViewer" />
       </div>
 
-      <ImageViewer :visible="viewerVisible" :src="viewerSrc" @close="viewerVisible = false" />
+      <ImageViewer :visible="viewerVisible" :images="meta.extraPictures ?? []" :start-index="viewerIndex" @close="viewerVisible = false" />
 
       <div v-show="activeTab === 'lyrics'">
         <TrackVisualTab
@@ -76,6 +77,9 @@
       </div>
     </template>
 
+    <Toast />
+    <ConfirmDialog :pt="{ root: { style: 'max-width: 300px; margin: 0 16px' } }" />
+
     <!-- テストクリア確認モーダル -->
     <Dialog v-model:visible="clearConfirmVisible" modal :closable="false" :style="{ width: '280px' }" header="テストをクリア">
       <p class="clear-confirm-msg">この曲のテスト問題と進捗をすべて削除します。<br>よろしいですか？</p>
@@ -89,8 +93,10 @@
     <PlayerBar
       ref="playerBarRef"
       :audio-url="meta.audioUrl"
+      :next-audio-url="nextAudioUrl"
       :autoplay="props.autoplay"
       :keyboard-visible="keyboardVisible"
+      @next-track="goToNextTrack"
     />
 
   </div>
@@ -102,6 +108,8 @@ import Button from 'primevue/button'
 import Message from 'primevue/message'
 import ProgressSpinner from 'primevue/progressspinner'
 import Dialog from 'primevue/dialog'
+import ConfirmDialog from 'primevue/confirmdialog'
+import Toast from 'primevue/toast'
 import ImageViewer from '../components/ImageViewer.vue'
 import PlayerBar from '../components/track/PlayerBar.vue'
 import TrackInfoTab from '../components/track/TrackInfoTab.vue'
@@ -111,20 +119,36 @@ import TrackQuizTab from '../components/track/TrackQuizTab.vue'
 import { useTrackLoader } from '../composables/useTrackLoader'
 import { useQuizSession } from '../composables/useQuizSession'
 import { useVisualStore } from '../stores/visualStore'
+import { useTrackMetadataStore } from '../stores/trackMetadataStore'
+import { useQuizStore } from '../stores/quizStore'
 import { generateVisualHtml, buildPlainVisualHtml } from '../services/ai/generateVisual'
+import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 
 const props = defineProps({
   track: { type: Object, required: true },
   albumTracks: { type: Array, default: () => [] },
   autoplay: { type: Boolean, default: false },
 })
-defineEmits(['back', 'select-track'])
+const emit = defineEmits(['back', 'select-track'])
+
+function goToNextTrack() {
+  const tracks = props.albumTracks
+  if (!tracks.length) return
+  const idx = tracks.findIndex(t => t.path_lower === props.track.path_lower)
+  if (idx === -1 || idx >= tracks.length - 1) return
+  emit('select-track', { track: tracks[idx + 1], albumTracks: tracks, autoplay: true })
+}
 
 const playerBarRef = ref(null)
 const visualStore = useVisualStore()
+const trackMetadataStore = useTrackMetadataStore()
+const _quizStoreForDelete = useQuizStore()
+const confirm = useConfirm()
+const toast = useToast()
 
 // ===== トラック読み込み =====
-const { meta, textReady, error, loadTrack } = useTrackLoader(props, {
+const { meta, textReady, error, loadTrack, nextAudioUrl } = useTrackLoader(props, {
   getPlaying: () => playerBarRef.value?.playing.value ?? false,
 })
 
@@ -138,9 +162,9 @@ const activeTab = ref('info')
 
 // ImageViewer
 const viewerVisible = ref(false)
-const viewerSrc = ref('')
-function openViewer(src) {
-  viewerSrc.value = src
+const viewerIndex = ref(0)
+function openViewer(index) {
+  viewerIndex.value = index
   viewerVisible.value = true
 }
 
@@ -204,6 +228,30 @@ watch(() => props.track, () => {
   visualPhase.value = visualStore.get(props.track.path_lower) ? 'ready' : 'idle'
 })
 
+function confirmDeleteTrackData() {
+  confirm.require({
+    message: 'この曲のクイズ・歌詞ビジュアル・メタデータをすべて削除します。この操作は元に戻せません。',
+    header: `「${meta.value.title ?? props.track.name}」のデータを削除しますか？`,
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: '削除する',
+    rejectLabel: 'キャンセル',
+    acceptSeverity: 'danger',
+    accept() {
+      try {
+        const path = props.track.path_lower
+        _quizStoreForDelete.removeTrack(path)
+        visualStore.remove(path)
+        trackMetadataStore.remove(path)
+        visualPhase.value = 'idle'
+        visualError.value = null
+        toast.add({ severity: 'success', summary: 'データを削除しました', life: 3000 })
+      } catch (e) {
+        console.error('[deleteTrackData]', e)
+      }
+    },
+  })
+}
+
 // ===== クイズ =====
 const {
   quizStore,
@@ -247,6 +295,8 @@ watch(() => quizStore.shuffle, applyShuffleToRemaining)
 }
 
 .header-title {
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
   overflow: hidden;

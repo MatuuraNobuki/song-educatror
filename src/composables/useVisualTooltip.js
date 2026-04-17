@@ -4,6 +4,11 @@ export function useVisualTooltip() {
   const visualBodyRef = ref(null)
   const tooltip = reactive({ visible: false, title: '', body: '', style: {} })
   const activeAnnotated = ref(null)
+  const _tooltipData = ref({})
+
+  function setTooltipData(data) {
+    _tooltipData.value = data
+  }
 
   function showTooltip(el, clientX, clientY, tooltipData) {
     const key = el.dataset.key
@@ -43,16 +48,17 @@ export function useVisualTooltip() {
     }
   }
 
-  // touchstart は passive: false が必要なので手動登録
+  // touchstart は passive: false が必要なので手動登録。tooltipDataは内部refで常に最新を参照
   function registerTouchHandler(el, tooltipData) {
     if (!el) return
+    if (tooltipData) _tooltipData.value = tooltipData
     el.addEventListener('touchstart', (e) => {
       const ann = e.target.closest?.('.annotated')
       if (ann) {
         const t = e.touches[0]
         activeAnnotated.value === ann
           ? hideTooltip()
-          : showTooltip(ann, t.clientX, t.clientY, tooltipData)
+          : showTooltip(ann, t.clientX, t.clientY, _tooltipData.value)
         e.preventDefault()
         e.stopPropagation()
       } else {
@@ -61,5 +67,5 @@ export function useVisualTooltip() {
     }, { passive: false })
   }
 
-  return { visualBodyRef, tooltip, showTooltip, hideTooltip, onVisualClick, registerTouchHandler }
+  return { visualBodyRef, tooltip, showTooltip, hideTooltip, onVisualClick, registerTouchHandler, setTooltipData }
 }

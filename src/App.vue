@@ -30,6 +30,15 @@ onMounted(() => {
       oauthCode.value = code
     }
   })
+
+  // Androidの戻るジェスチャ / ハードウェアバックボタン
+  CapApp.addListener('backButton', () => {
+    if (selectedTrack.value) {
+      backToList()
+    } else {
+      CapApp.exitApp()
+    }
+  })
 })
 
 function onAuthenticated() {
@@ -38,10 +47,10 @@ function onAuthenticated() {
   history.replaceState(null, '', '/')
 }
 
-function selectTrack({ track, albumTracks, autoplay: ap = false }) {
+function selectTrack({ track, albumTracks }) {
   selectedTrack.value = track
   selectedAlbumTracks.value = albumTracks
-  autoplay.value = ap
+  autoplay.value = true
 }
 
 function backToList() {

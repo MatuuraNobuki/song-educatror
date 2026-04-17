@@ -47,10 +47,10 @@ function onAuthenticated() {
   history.replaceState(null, '', '/')
 }
 
-function selectTrack({ track, albumTracks }) {
+function selectTrack({ track, albumTracks, autoplay: ap = false }) {
   selectedTrack.value = track
   selectedAlbumTracks.value = albumTracks
-  autoplay.value = true
+  autoplay.value = ap
 }
 
 function backToList() {

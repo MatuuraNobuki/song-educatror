@@ -33,7 +33,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, toRef } from 'vue'
 import Button from 'primevue/button'
 import Slider from 'primevue/slider'
 import ToggleSwitch from 'primevue/toggleswitch'
@@ -48,7 +48,7 @@ const props = defineProps({
 
 const emit = defineEmits(['playing-changed', 'next-track'])
 
-const autoplayRef = { value: props.autoplay }
+const autoplayRef = toRef(props, 'autoplay')
 const autoNextEnabled = ref(false)
 
 const {

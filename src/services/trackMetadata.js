@@ -93,7 +93,7 @@ function parseId3v2Frames(buffer) {
 
       const picData = bytes.slice(pos, dataEnd)
       const blob = new Blob([picData], { type: mimeType || 'image/jpeg' })
-      pictures.push({ url: URL.createObjectURL(blob), pictureType })
+      pictures.push({ url: URL.createObjectURL(blob), blob, pictureType })
     }
 
     // ── COMM ──────────────────────────────────────────────
@@ -157,11 +157,10 @@ export async function fetchTrackMetadata(path) {
   const lyrics = tags.lyrics?.lyrics ?? tags.USLT?.text ?? null
 
   // pictureType 3 = Front Cover（アルバムアート）、それ以外は追加画像
-  const albumPictures = pictures.filter((p) => p.pictureType === 3).map((p) => p.url)
-  const extraPictures = pictures.filter((p) => p.pictureType !== 3).map((p) => p.url)
-  // アルバムアートがなければ全画像をアルバムアートとして扱う
-  const finalAlbumPictures = albumPictures.length > 0 ? albumPictures : pictures.map((p) => p.url)
-  const finalExtraPictures = albumPictures.length > 0 ? extraPictures : []
+  const albumPictures = pictures.filter((p) => p.pictureType === 3)
+  const extraPictures = pictures.filter((p) => p.pictureType !== 3)
+  const placeholderSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'><rect width='300' height='300' fill='%23374151'/><text x='150' y='160' font-size='80' text-anchor='middle' fill='%239CA3AF'>♪</text></svg>`
+  const hasAlbumArt = albumPictures.length > 0
 
   return {
     title:                 tags.title  ?? null,
@@ -170,8 +169,9 @@ export async function fetchTrackMetadata(path) {
     date:                  tags.year   ?? null,
     trackNumber:           tags.track  ?? null,
     lyrics,
-    pictures:              finalAlbumPictures,
-    extraPictures:         finalExtraPictures,
+    pictures:              hasAlbumArt ? albumPictures.map((p) => p.url) : [placeholderSvg],
+    pictureBlobs:          hasAlbumArt ? albumPictures.map((p) => p.blob) : [],
+    extraPictures:         extraPictures.map((p) => p.url),
     transcribedTextPreview,
     audioUrl:              url,
   }

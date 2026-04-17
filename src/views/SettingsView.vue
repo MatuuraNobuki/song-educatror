@@ -97,7 +97,20 @@
       <Button label="保存" icon="pi pi-save" severity="secondary" @click="saveFilePath" />
     </div>
 
+    <Divider />
+
+    <div class="section">
+      <p class="section-title">データ管理</p>
+      <Button
+        label="すべてのデータを削除"
+        icon="pi pi-trash"
+        severity="danger"
+        @click="confirmClearAll"
+      />
+    </div>
+
     <Toast />
+    <ConfirmDialog />
   </div>
 </template>
 
@@ -108,7 +121,9 @@ import Password from 'primevue/password'
 import Button from 'primevue/button'
 import Divider from 'primevue/divider'
 import Toast from 'primevue/toast'
+import ConfirmDialog from 'primevue/confirmdialog'
 import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
 import {
   loadCredentials,
   saveCredentials as persistCredentials,
@@ -119,8 +134,19 @@ import {
   saveFilePath as persistFilePath,
 } from '../services/dropboxAuth'
 import { loadApiKey, saveApiKey } from '../services/ai/client'
+import { clearAllBlobs } from '../services/pictureDb'
+import { useAlbumCollapseStore } from '../stores/albumCollapseStore'
+import { useVisualStore } from '../stores/visualStore'
+import { useQuizStore } from '../stores/quizStore'
+import { useTrackMetadataStore } from '../stores/trackMetadataStore'
 
 const toast = useToast()
+const confirm = useConfirm()
+
+const albumCollapseStore = useAlbumCollapseStore()
+const visualStore = useVisualStore()
+const quizStore = useQuizStore()
+const trackMetadataStore = useTrackMetadataStore()
 
 const appKey = ref('')
 const appSecret = ref('')
@@ -166,6 +192,25 @@ function disconnect() {
   clearAuth()
   authenticated.value = false
   toast.add({ severity: 'info', summary: '切断しました', life: 2000 })
+}
+
+function confirmClearAll() {
+  confirm.require({
+    message: 'クイズ・楽曲メタデータ・表示キャッシュなど、すべてのストアデータを削除します。この操作は元に戻せません。',
+    header: 'すべてのデータを削除しますか？',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: '削除する',
+    rejectLabel: 'キャンセル',
+    acceptSeverity: 'danger',
+    accept() {
+      albumCollapseStore.$reset()
+      visualStore.$reset()
+      quizStore.$reset()
+      trackMetadataStore.$reset()
+      clearAllBlobs().catch(() => {})
+      toast.add({ severity: 'success', summary: 'データを削除しました', life: 3000 })
+    },
+  })
 }
 </script>
 

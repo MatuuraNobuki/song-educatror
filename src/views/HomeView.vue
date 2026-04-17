@@ -75,6 +75,8 @@ import { useAlbumCollapseStore } from '../stores/albumCollapseStore'
 import { useQuizStore } from '../stores/quizStore'
 import { useVisualStore } from '../stores/visualStore'
 
+const PLACEHOLDER_SVG = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'><rect width='300' height='300' fill='%23374151'/><text x='150' y='160' font-size='80' text-anchor='middle' fill='%239CA3AF'>♪</text></svg>`
+
 const metaStore = useTrackMetadataStore()
 const albumStore = useAlbumCollapseStore()
 const quizStore = useQuizStore()
@@ -138,18 +140,17 @@ async function load() {
   try {
     tracks.value = await listAllTracks(filePath.value)
 
-    // キャッシュ済みはストアから即反映、未キャッシュのみフェッチ
+    // キャッシュ済みはストアから即反映（画像はIndexedDBから復元）
     const toRefresh = []
-    for (const track of tracks.value) {
+    await Promise.all(tracks.value.map(async (track) => {
       const cached = metaStore.cache[track.path_lower]
       if (cached) {
-        metadata[track.id] = {
-          ...cached,
-          pictures: metaStore.getPictures(track.path_lower),
-        }
+        const dbPictures = await metaStore.loadPicturesFromDb(track.path_lower)
+        const pictures = dbPictures.length > 0 ? dbPictures : [PLACEHOLDER_SVG]
+        metadata[track.id] = { ...cached, pictures }
       }
       toRefresh.push(track)
-    }
+    }))
 
     // 現在のリストにないパスをストアから削除
     metaStore.prune(tracks.value.map(t => t.path_lower))

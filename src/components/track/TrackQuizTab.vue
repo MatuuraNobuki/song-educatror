@@ -19,7 +19,24 @@
         <Message v-if="quizGenError" severity="error" :closable="false" class="quiz-gen-error">{{ quizGenError }}</Message>
       </div>
       <div class="quiz-difficulty-btns">
-        <Button v-for="d in ['low', 'medium', 'high']" :key="d" :label="DIFFICULTY_LABELS[d]" :severity="{ low: 'info', medium: 'success', high: 'warn' }[d]" class="quiz-submit-btn" @click="$emit('start-quiz', d)" />
+        <button
+          v-for="d in ['low', 'medium', 'high']"
+          :key="d"
+          class="quiz-difficulty-card"
+          :class="[`quiz-difficulty-card--${d}`, difficultyStats[d].perfect && 'quiz-difficulty-card--perfect']"
+          @click="$emit('start-quiz', d)"
+        >
+          <span class="quiz-difficulty-card__label">{{ DIFFICULTY_LABELS[d] }}</span>
+          <span v-if="!difficultyStats[d].hasQuestions" class="quiz-difficulty-card__status quiz-difficulty-card__status--none">
+            <i class="pi pi-plus-circle" />未作成
+          </span>
+          <span v-else-if="difficultyStats[d].perfect" class="quiz-difficulty-card__status quiz-difficulty-card__status--perfect">
+            <i class="pi pi-star-fill" />全問正解！
+          </span>
+          <span v-else class="quiz-difficulty-card__status quiz-difficulty-card__status--score">
+            {{ difficultyStats[d].correct }} / {{ difficultyStats[d].total }}問正解
+          </span>
+        </button>
       </div>
     </template>
 
@@ -168,6 +185,7 @@ import Message from 'primevue/message'
 
 const props = defineProps({
   quizStore: { type: Object, required: true },
+  trackPath: { type: String, required: true },
   quizPhase: { type: String, required: true },
   quizIndex: { type: Number, required: true },
   quizOrder: { type: Array, required: true },
@@ -191,6 +209,16 @@ const emit = defineEmits([
   'retry', 'regenerate',
   'update:userAnswer', 'update:acceptAsCorrect',
 ])
+
+const difficultyStats = computed(() => {
+  return Object.fromEntries(['low', 'medium', 'high'].map(d => {
+    const questions = props.quizStore.getQuestions(props.trackPath, d)
+    if (!questions || questions.length === 0) return [d, { hasQuestions: false, correct: 0, total: 0, perfect: false }]
+    const total = questions.length
+    const correct = (props.quizStore.answeredCorrect[`${props.trackPath}:${d}`] ?? []).length
+    return [d, { hasQuestions: true, correct, total, perfect: correct >= total }]
+  }))
+})
 
 const userAnswerModel = computed({
   get: () => props.userAnswer,
@@ -259,6 +287,60 @@ const acceptAsCorrectModel = computed({
   gap: 8px;
   width: 100%;
   margin-top: 8px;
+}
+
+.quiz-difficulty-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1.5px solid var(--p-content-border-color);
+  background: var(--p-content-background);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.quiz-difficulty-card:hover {
+  background: var(--p-content-hover-background);
+}
+
+.quiz-difficulty-card--low { border-left: 4px solid var(--p-blue-400); }
+.quiz-difficulty-card--medium { border-left: 4px solid var(--p-green-500); }
+.quiz-difficulty-card--high { border-left: 4px solid var(--p-orange-400); }
+
+.quiz-difficulty-card--perfect {
+  background: color-mix(in srgb, var(--p-yellow-400) 12%, transparent);
+  border-color: color-mix(in srgb, var(--p-yellow-400) 60%, transparent);
+}
+
+.quiz-difficulty-card__label {
+  color: var(--p-text-color);
+}
+
+.quiz-difficulty-card__status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.quiz-difficulty-card__status--none {
+  color: var(--p-text-muted-color);
+}
+
+.quiz-difficulty-card__status--score {
+  color: var(--p-text-muted-color);
+}
+
+.quiz-difficulty-card__status--perfect {
+  color: var(--p-yellow-500);
+  font-weight: 700;
 }
 
 /* 生成中 */

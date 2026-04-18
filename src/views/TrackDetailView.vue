@@ -47,6 +47,7 @@
       <div v-show="activeTab === 'quiz'">
         <TrackQuizTab
           :quiz-store="quizStore"
+          :track-path="track.path_lower"
           :quiz-phase="quizPhase"
           :quiz-index="quizIndex"
           :quiz-order="quizOrder"

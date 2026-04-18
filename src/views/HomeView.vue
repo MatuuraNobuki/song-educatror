@@ -277,7 +277,7 @@ async function fetchAllMetadata(trackList) {
 .track-cover-wrap {
   width: 34px;
   height: 34px;
-  border-radius: 6px;
+  border-radius: 3px;
   overflow: hidden;
   display: grid;
   place-items: center;

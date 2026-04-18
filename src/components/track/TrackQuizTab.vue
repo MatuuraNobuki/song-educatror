@@ -51,19 +51,14 @@
     <!-- 問題フェーズ -->
     <template v-else-if="quizPhase === 'question'">
       <div class="quiz-header">
+        <div class="quiz-header-actions">
+          <Button icon="pi pi-home" text rounded size="small" severity="secondary" @click="$emit('exit-cover')" />
+        </div>
         <div class="quiz-progress">
           <span class="quiz-progress-text">{{ quizIndex + 1 }} / {{ quizQuestions.length }}</span>
           <div class="quiz-progress-bar">
             <div class="quiz-progress-fill" :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }" />
           </div>
-        </div>
-        <div class="quiz-header-actions">
-          <div class="quiz-shuffle-row quiz-shuffle-inline">
-            <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleQ" />
-            <label for="shuffleQ" class="quiz-shuffle-label">シャッフル</label>
-          </div>
-          <Button icon="pi pi-home" text rounded size="small" severity="secondary" @click="$emit('exit-cover')" />
-          <Button icon="pi pi-trash" text rounded size="small" severity="danger" class="quiz-clear-btn" @click="$emit('confirm-clear')" />
         </div>
       </div>
       <div class="quiz-card">
@@ -87,19 +82,14 @@
     <!-- 正誤フェーズ -->
     <template v-else-if="quizPhase === 'feedback'">
       <div class="quiz-header">
+        <div class="quiz-header-actions">
+          <Button icon="pi pi-home" text rounded size="small" severity="secondary" @click="$emit('exit-cover')" />
+        </div>
         <div class="quiz-progress">
           <span class="quiz-progress-text">{{ quizIndex + 1 }} / {{ quizQuestions.length }}</span>
           <div class="quiz-progress-bar">
             <div class="quiz-progress-fill" :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }" />
           </div>
-        </div>
-        <div class="quiz-header-actions">
-          <div class="quiz-shuffle-row quiz-shuffle-inline">
-            <Checkbox v-model="quizStore.shuffle" :binary="true" inputId="shuffleF" />
-            <label for="shuffleF" class="quiz-shuffle-label">シャッフル</label>
-          </div>
-          <Button icon="pi pi-home" text rounded size="small" severity="secondary" @click="$emit('exit-cover')" />
-          <Button icon="pi pi-trash" text rounded size="small" severity="danger" class="quiz-clear-btn" @click="$emit('confirm-clear')" />
         </div>
       </div>
       <div class="quiz-card">
@@ -295,7 +285,7 @@ const acceptAsCorrectModel = computed({
   justify-content: space-between;
   width: 100%;
   padding: 12px 16px;
-  border-radius: 10px;
+  border-radius: 3px;
   border: 1.5px solid var(--p-content-border-color);
   background: var(--p-content-background);
   cursor: pointer;
@@ -365,6 +355,22 @@ const acceptAsCorrectModel = computed({
   gap: 8px;
 }
 
+.quiz-shuffle-row :deep(.p-checkbox) {
+  width: 14px;
+  height: 14px;
+}
+
+.quiz-shuffle-row :deep(.p-checkbox-box) {
+  width: 14px;
+  height: 14px;
+}
+
+.quiz-shuffle-row :deep(.p-checkbox-icon) {
+  font-size: 10px;
+  width: 10px;
+  height: 10px;
+}
+
 .quiz-shuffle-label {
   font-size: 14px;
   cursor: pointer;
@@ -405,8 +411,8 @@ const acceptAsCorrectModel = computed({
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
-  width: 50%;
+  margin-bottom: 0;
+  width: 90%;
 }
 
 .quiz-progress-text {
@@ -448,7 +454,7 @@ const acceptAsCorrectModel = computed({
 
 .quiz-hint-wrap {
   border: 1px solid var(--p-content-border-color);
-  border-radius: 8px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
@@ -507,7 +513,7 @@ const acceptAsCorrectModel = computed({
 
 /* フィードバック */
 .quiz-feedback {
-  border-radius: 12px;
+  border-radius: 3px;
   padding: 20px 16px;
   display: flex;
   flex-direction: column;
@@ -570,7 +576,7 @@ const acceptAsCorrectModel = computed({
 .feedback-tag {
   font-size: 11px;
   background: var(--p-content-border-color);
-  border-radius: 4px;
+  border-radius: 3px;
   padding: 2px 7px;
   color: var(--p-text-muted-color);
 }
@@ -622,7 +628,7 @@ const acceptAsCorrectModel = computed({
   gap: 6px;
   margin-top: 8px;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: 3px;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -661,7 +667,7 @@ const acceptAsCorrectModel = computed({
   text-align: center;
   padding: 28px 16px 20px;
   background: var(--p-content-hover-background);
-  border-radius: 14px;
+  border-radius: 3px;
 }
 
 .result-score {
@@ -701,7 +707,7 @@ const acceptAsCorrectModel = computed({
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: 3px;
   border: 1px solid var(--p-content-border-color);
 }
 

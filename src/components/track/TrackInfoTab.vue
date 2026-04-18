@@ -66,7 +66,7 @@ defineProps({
   width: 350px;
   height: 350px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 3px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
   scroll-snap-align: start;
@@ -75,7 +75,7 @@ defineProps({
 .artwork-placeholder {
   width: 350px;
   height: 350px;
-  border-radius: 12px;
+  border-radius: 3px;
   background: var(--p-content-hover-background);
   display: flex;
   align-items: center;
@@ -90,7 +90,7 @@ defineProps({
 .meta-card {
   margin: 0 16px 16px;
   border: 1px solid var(--p-content-border-color);
-  border-radius: 10px;
+  border-radius: 3px;
   padding: 4px 16px;
   border: none;
   margin-bottom: 0;

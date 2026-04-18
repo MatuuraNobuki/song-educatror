@@ -41,7 +41,7 @@ defineEmits(['open-viewer'])
 
 .extra-image {
   width: 100%;
-  border-radius: 10px;
+  border-radius: 3px;
   object-fit: contain;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   cursor: zoom-in;

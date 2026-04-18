@@ -101,16 +101,24 @@
 
     <div class="section">
       <p class="section-title">データ管理</p>
-      <Button
-        label="すべてのデータを削除"
-        icon="pi pi-trash"
-        severity="danger"
-        @click="confirmClearAll"
-      />
+      <div class="button-group">
+        <Button
+          label="楽曲データをクリア"
+          icon="pi pi-refresh"
+          severity="secondary"
+          @click="confirmClearTrackData"
+        />
+        <Button
+          label="すべてのデータを削除"
+          icon="pi pi-trash"
+          severity="danger"
+          @click="confirmClearAll"
+        />
+      </div>
     </div>
 
     <Toast />
-    <ConfirmDialog />
+    <ConfirmDialog :pt="{ root: { style: 'max-width: 300px; margin: 0 16px' } }" />
   </div>
 </template>
 
@@ -194,6 +202,23 @@ function disconnect() {
   toast.add({ severity: 'info', summary: '切断しました', life: 2000 })
 }
 
+function confirmClearTrackData() {
+  confirm.require({
+    message: '楽曲メタデータと画像キャッシュを削除します。クイズと歌詞ビジュアルは保持されます。',
+    header: '楽曲データをクリアしますか？',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'クリア',
+    rejectLabel: 'キャンセル',
+    acceptSeverity: 'secondary',
+    accept() {
+      albumCollapseStore.$reset()
+      trackMetadataStore.$reset()
+      clearAllBlobs().catch(() => {})
+      toast.add({ severity: 'success', summary: '楽曲データをクリアしました', life: 3000 })
+    },
+  })
+}
+
 function confirmClearAll() {
   confirm.require({
     message: 'クイズ・楽曲メタデータ・表示キャッシュなど、すべてのストアデータを削除します。この操作は元に戻せません。',
@@ -266,5 +291,12 @@ label {
 
 .status i {
   font-size: 18px;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
 }
 </style>

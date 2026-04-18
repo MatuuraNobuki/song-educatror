@@ -203,7 +203,7 @@ function onVisualClickWrapper(e) {
   color: var(--color-accent, #2e7d32);
   font-weight: 600;
   transition: background 0.15s;
-  border-radius: 2px;
+  border-radius: 3px;
 }
 
 :deep(.annotated:active),
@@ -236,7 +236,7 @@ function onVisualClickWrapper(e) {
   font-size: 13px;
   line-height: 1.65;
   padding: 12px 15px;
-  border-radius: 8px;
+  border-radius: 3px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   pointer-events: none;
 }

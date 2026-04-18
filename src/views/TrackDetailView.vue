@@ -6,7 +6,7 @@
       <div class="detail-header">
         <Button icon="pi pi-arrow-left" text rounded @click="$emit('back')" />
         <span class="header-title">{{ meta.title }}</span>
-        <Button icon="pi pi-trash" text rounded severity="danger" @click="confirmDeleteTrackData" />
+        <Button label="クリア" text severity="secondary" @click="confirmDeleteTrackData" />
       </div>
       <div v-if="textReady" class="tab-nav">
         <button v-for="tab in tabs" :key="tab.value" class="tab-btn" :class="{ active: activeTab === tab.value }" @click="activeTab = tab.value">{{ tab.label }}</button>
@@ -121,7 +121,6 @@ import { useTrackLoader } from '../composables/useTrackLoader'
 import { useQuizSession } from '../composables/useQuizSession'
 import { useVisualStore } from '../stores/visualStore'
 import { useTrackMetadataStore } from '../stores/trackMetadataStore'
-import { useQuizStore } from '../stores/quizStore'
 import { generateVisualHtml, buildPlainVisualHtml } from '../services/ai/generateVisual'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
@@ -144,7 +143,6 @@ function goToNextTrack() {
 const playerBarRef = ref(null)
 const visualStore = useVisualStore()
 const trackMetadataStore = useTrackMetadataStore()
-const _quizStoreForDelete = useQuizStore()
 const confirm = useConfirm()
 const toast = useToast()
 
@@ -231,7 +229,7 @@ watch(() => props.track, () => {
 
 function confirmDeleteTrackData() {
   confirm.require({
-    message: 'この曲のクイズ・歌詞ビジュアル・メタデータをすべて削除します。この操作は元に戻せません。',
+    message: 'この曲のメタデータを削除します。クイズと歌詞ビジュアルは保持されます。',
     header: `「${meta.value.title ?? props.track.name}」のデータを削除しますか？`,
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: '削除する',
@@ -240,11 +238,7 @@ function confirmDeleteTrackData() {
     accept() {
       try {
         const path = props.track.path_lower
-        _quizStoreForDelete.removeTrack(path)
-        visualStore.remove(path)
         trackMetadataStore.remove(path)
-        visualPhase.value = 'idle'
-        visualError.value = null
         toast.add({ severity: 'success', summary: 'データを削除しました', life: 3000 })
       } catch (e) {
         console.error('[deleteTrackData]', e)

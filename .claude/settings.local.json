@@ -22,7 +22,8 @@
       "Skill(claude-api:*)",
       "Bash(npx vue-tsc:*)",
       "Bash(find /s/projects/song-educatror/src -type f \\\\\\( -name \"*.vue\" -o -name \"*.js\" -o -name \"*.json\" \\\\\\) -exec wc -l {} +)",
-      "Bash(python -c \"from PIL import Image; img = Image.open\\('icon.png'\\); print\\(img.size, img.mode\\)\")"
+      "Bash(python -c \"from PIL import Image; img = Image.open\\('icon.png'\\); print\\(img.size, img.mode\\)\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); console.log\\(fs.existsSync\\('node_modules/sharp'\\)\\)\")"
     ]
   }
 }

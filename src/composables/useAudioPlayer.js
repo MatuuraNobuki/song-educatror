@@ -13,18 +13,23 @@ export function useAudioPlayer({ autoplay } = {}) {
     if (!audioEl.value) return
     if (playing.value) {
       audioEl.value.pause()
-      playing.value = false
     } else {
-      audioEl.value.play()
-      playing.value = true
+      audioEl.value.play().catch(() => { playing.value = false })
     }
+  }
+
+  function onPlay() {
+    playing.value = true
+  }
+
+  function onPause() {
+    playing.value = false
   }
 
   function onLoaded() {
     duration.value = audioEl.value?.duration ?? 0
     if (autoplay?.value) {
-      audioEl.value.play()
-      playing.value = true
+      audioEl.value.play().catch(() => { playing.value = false })
     }
   }
 
@@ -58,6 +63,8 @@ export function useAudioPlayer({ autoplay } = {}) {
     seekValue,
     formatTime,
     togglePlay,
+    onPlay,
+    onPause,
     onLoaded,
     onTimeUpdate,
     onSeek,

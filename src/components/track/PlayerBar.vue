@@ -6,6 +6,8 @@
       preload="metadata"
       :loop="repeatEnabled"
       v-if="audioUrl"
+      @play="onPlay"
+      @pause="onPause"
       @timeupdate="onTimeUpdate"
       @loadedmetadata="onLoaded"
       @ended="onEnded"
@@ -53,7 +55,7 @@ const autoNextEnabled = ref(false)
 
 const {
   audioEl, playing, repeatEnabled, currentTime, duration, seekValue,
-  formatTime, togglePlay, onLoaded, onTimeUpdate, onSeek, reset,
+  formatTime, togglePlay, onPlay, onPause, onLoaded, onTimeUpdate, onSeek, reset,
 } = useAudioPlayer({ autoplay: autoplayRef })
 
 watch(autoNextEnabled, (v) => { if (v) repeatEnabled.value = false })

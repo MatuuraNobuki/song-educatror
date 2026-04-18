@@ -89,7 +89,7 @@ export function useTrackLoader(props, { getPlaying }) {
       fetchTrackMetadata(pathLower)
         .then(fresh => {
           const blobUrl = audioBlobUrlCache[pathLower]
-          const audioUrl = blobUrl ?? (getPlaying() ? meta.value.audioUrl : fresh.audioUrl)
+          const audioUrl = blobUrl ?? meta.value.audioUrl ?? fresh.audioUrl
           meta.value = { ...fresh, audioUrl }
           metaStore.set(pathLower, fresh)
           setCached(pathLower, fresh)
